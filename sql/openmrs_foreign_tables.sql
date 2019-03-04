@@ -1,4 +1,4 @@
--- creating FOREIGN TABLES to get data from openmrs for concepts, users and location this tables
+-- creating FOREIGN TABLES to get data from openmrs for location_attribute,location_attribute_type, and location
 
 -- Create Tables
 CREATE FOREIGN TABLE location (
@@ -31,52 +31,48 @@ date_changed VARCHAR (50))
 SERVER mysql_server
 OPTIONS (dbname 'openmrs', TABLE_NAME 'location');
 
-CREATE FOREIGN TABLE location_attribute_type_id (
-location_attribute_type_id INT(11) PRIMARY KEY,
+CREATE FOREIGN TABLE location_attribute_type (
+location_attribute_type_id INTEGER,
 name VARCHAR (255),
 description  VARCHAR (1024),
 datatype VARCHAR (255),
 datatype_config TEXT,
 preferred_handler VARCHAR (255),
 handler_config TEXT,
-min_occurs INT(11),
-max_occurs INT(11),
-creator  INT(11),
+min_occurs INTEGER,
+max_occurs INTEGER,
+creator  INTEGER,
 date_created VARCHAR (50),
 date_changed VARCHAR (50),
 retired INT2,
-retired_by INT(11),
+retired_by INTEGER,
 date_retired VARCHAR (50),
 retire_reason VARCHAR (255))
 SERVER mysql_server
-OPTIONS (dbname 'openmrs', TABLE_NAME 'location_attribute_type_id');
+OPTIONS (dbname 'openmrs', TABLE_NAME 'location_attribute_type');
 
 CREATE FOREIGN TABLE location_attribute (
-location_attribute_id INT(11) PRIMARY KEY,
-location_id INT(11),
-attribute_type_id INT(11),
+location_attribute_id INTEGER,
+location_id INTEGER,
+attribute_type_id INTEGER,
 value_reference TEXT,
 uuid UUID,
-creator INT(11),
+creator INTEGER,
 date_created VARCHAR (50),
-changed_by INT(11),
+changed_by INTEGER,
 date_changed VARCHAR (50),
 voided INT2,
-voided_by INT(11),
+voided_by INTEGER,
 date_voided VARCHAR (50),
 void_reason TEXT)
 SERVER mysql_server
 OPTIONS (dbname 'openmrs', TABLE_NAME 'location_attribute');
 
--- Create indexes
-CREATE INDEX idx_location_attribute_location_id
-ON location_attribute(location_id);
+-- Create view for mapping openmrs location uuid to dhis organisation unit id
 
-CREATE UNIQUE INDEX idx_location_uuid
-ON location(uuid);
-
-CREATE UNIQUE INDEX idx_location_id
-ON location(location_id);
-
-CREATE INDEX idx_location_name
-ON location(name);
+CREATE OR REPLACE VIEW openmrs_dhis_location_map 
+AS SELECT location.uuid AS location_uuid,
+ value_reference AS dhis_orgunit_id
+  FROM location JOIN 
+  location_attribute 
+  ON location.location_id = location_attribute.location_id;
