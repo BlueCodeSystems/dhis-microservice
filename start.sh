@@ -4,15 +4,15 @@
 export SCRIPT=script.py
 
 #set enviromental variables
-export POSTGRES_USER=zita
-export POSTGRES_PASS=zita
-export POSTGRES_DB=zita
+export POSTGRES_USER=postgres
+export POSTGRES_PASS=password
+export POSTGRES_DB=opensrp
 export POSTGRES_HOST=127.0.0.1
 export DHIS_USER=zita
 export DHIS_PASS=zita
 export DHIS_HOST=127.0.0.1
 
-python script/$SCRIPT
+python script/$SCRIPT `date +%Y-%m`
 
 unset POSTGRES_USER
 unset POSTGRES_PASS
