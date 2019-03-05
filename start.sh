@@ -8,9 +8,9 @@ export POSTGRES_USER=postgres
 export POSTGRES_PASS=password
 export POSTGRES_DB=opensrp
 export POSTGRES_HOST=127.0.0.1
-export DHIS_USER=zita
-export DHIS_PASS=zita
-export DHIS_HOST=127.0.0.1
+export DHIS_USER=admin
+export DHIS_PASS=pass
+export DHIS_HOST=https://dhis.zeir-stage.smartregister.org
 
 python script/$SCRIPT `date +%Y-%m`
 

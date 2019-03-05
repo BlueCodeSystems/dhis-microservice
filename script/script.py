@@ -2,17 +2,21 @@ import config
 import psycopg2
 import sys
 import json
+import requests
 
-#db connection
 try:
     report_month = sys.argv[1]
 except:
     report_month = None
 
+rest_api_endpoint = '/api/26/dataValueSets'
+
+#db connection
 conn = psycopg2.connect(host=config.POSTGRES_HOST,database=config.POSTGRES_DB, user=config.POSTGRES_USER, password=config.POSTGRES_PASS)
 cur = conn.cursor()
-sql="SELECT * FROM public.couchdb where doc @> '{\"type\":\"Report\"}';"
 
+#fetch reports
+sql="SELECT * FROM public.couchdb where doc @> '{\"type\":\"Report\"}';"
 cur.execute(sql)
 result = cur.fetchall()
 
@@ -54,3 +58,10 @@ if(report_month !=  None):
     final_reports = map(filter_report_by_month(report_month),cleaned_reports)
 else:
     final_reports = cleaned_reports
+
+json_payload = parse_to_dhis_dataelement_json_payload(final_reports)
+
+#post reports to DHIS
+url = config.DHIS_HOST+rest_api_endpoint
+
+r = requests.post(url, auth=(config.DHIS_USER,config.DHIS_PASS), json=json_payload)
