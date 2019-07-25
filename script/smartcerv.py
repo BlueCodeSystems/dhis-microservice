@@ -38,14 +38,9 @@ try:
         print("------------------------------------------------")
 
         #Patients who are not on ART and were referred for suspect cancer on initial visit
-        cursor.execute("SELECT COUNT(DISTINCT patient_id) AS referred_not_on_art FROM (SELECT patient.patient_id FROM patient JOIN visit ON patient.patient_id = visit.patient_id JOIN encounter ON encounter.visit_id = visit.visit_id JOIN obs ON encounter.encounter_id = obs.encounter_id WHERE patient.voided = 0 AND visit_type_id = 2 AND encounter_type = 10 AND obs.concept_id = 165223 AND obs.value_coded = 165127) AS not_on_art JOIN obs ON patient_id = obs.person_id WHERE concept_id = 165182 AND value_coded = 165183;")
+        cursor.execute("SELECT a.patient_id, a.visit_id FROM (SELECT * from patient_visit WHERE obs_value = 'Suspect Cancer') a JOIN (SELECT * from patient_visit WHERE obs_value = 'Not on ART') b on a.visit_id = b.visit_id where a.visit_type_id = 2;")
         not_on_art_referred = cursor.fetchall()
         print(not_on_art_referred)
-
-        #Proof
-        cursor.execute("SELECT cancer.visit_id from (select visit_intial_hiv_referred.visit_id, encounter.encounter_id, obs_id, value_coded from encounter JOIN (select a.visit_id from (select visit.* from visit join encounter on visit.visit_id = encounter.visit_id where encounter_type = 10) a join (select  visit.visit_id from visit join encounter on visit.visit_id = encounter.visit_id where encounter_type = 14) b on a.visit_id = b.visit_id where a.visit_type_id = 2) visit_intial_hiv_referred on encounter.visit_id = visit_intial_hiv_referred.visit_id JOIN obs on obs.encounter_id = encounter.encounter_id WHERE value_coded = 165127) not_art join (select visit_intial_hiv_referred.visit_id, encounter.encounter_id, obs_id, value_coded from encounter JOIN select a.visit_id from (select visit.* from visit join encounter on visit.visit_id = encounter.visit_id where encounter_type = 10) a join (select  visit.visit_id from visit join encounter on visit.visit_id = encounter.visit_id where encounter_type = 14) b on a.visit_id = b.visit_id where a.visit_type_id = 2) visit_intial_hiv_referred on encounter.visit_id = visit_intial_hiv_referred.visit_id JOIN obs on obs.encounter_id = encounter.encounter_id WHERE value_coded = 165183) cancer on not_art.visit_id = cancer.visit_id")
-        proof = cursor.fetchall()
-        print(proof)
 
 except Error as e:
     print("Error while connecting to database: ", e)
