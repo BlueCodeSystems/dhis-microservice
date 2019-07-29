@@ -37,8 +37,8 @@ try:
 
         print("------------------------------------------------")
 
-        #Patients who are not on ART and were referred for suspect cancer on initial visit
-        cursor.execute("SELECT a.patient_id, a.visit_id FROM (SELECT * from patient_visit WHERE obs_value = 'Suspect Cancer') a JOIN (SELECT * from patient_visit WHERE obs_value = 'Not on ART') b on a.visit_id = b.visit_id where a.visit_type_id = 2;")
+        #Patients who are not on ART and were referred for suspect cancer on initial visit by month and facility
+        cursor.execute("SELECT COUNT(DISTINCT a.patient_id) AS Patients, DATE_FORMAT(a.date_started, '%m-%Y') AS date,a.location_id, a.location_name FROM (SELECT * FROM patient_visit_vw WHERE obs_value_concept_id = 165183) a JOIN (SELECT * FROM patient_visit_vw WHERE obs_value_concept_id = 165127) b ON a.visit_id = b.visit_id WHERE a.visit_type_id = 2 GROUP BY date, location_id,location_name")
         not_on_art_referred = cursor.fetchall()
         print(not_on_art_referred)
 
