@@ -9,74 +9,69 @@ try:
 
         cursor = connection.cursor(dictionary=True)
 
-        #Patients who are HIV positive - Initial visit
-        cursor.execute("SELECT COUNT(DISTINCT patient.patient_id) AS HIV_Positive FROM patient JOIN visit ON patient.patient_id = visit.patient_id JOIN encounter ON encounter.visit_id = visit.visit_id JOIN obs ON encounter.encounter_id = obs.encounter_id WHERE patient.voided = 0 AND visit_type_id = 2 AND encounter_type = 10 AND obs.concept_id = 165203 AND obs.value_coded = 165125")
+        #No. of patients referred for suspect cancer on initial visit and are HIV positive
+        cursor.execute("SELECT COUNT(DISTINCT referral_suspect_cancer.patient_id) AS no_of_patients, DATE_FORMAT(referral_suspect_cancer.date_started, '%m-%Y') AS visit_month, referral_suspect_cancer.visit_location_id, referral_suspect_cancer.visit_location_name FROM (SELECT * FROM visit_data_vw WHERE obs_value_concept_id = 165183) referral_suspect_cancer JOIN (SELECT * FROM visit_data_vw WHERE obs_value_concept_id = 165125) not_on_art ON referral_suspect_cancer.visit_id = not_on_art.visit_id WHERE referral_suspect_cancer.visit_type_id = 2 AND referral_suspect_cancer.visit_location_retired = 0 GROUP BY visit_month, visit_location_id, visit_location_name;")
         hiv_positive = cursor.fetchall()
         print(hiv_positive)
 
         print("------------------------------------------------")
 
-        #Patients who are HIV negative - Initial visit
-        cursor.execute("SELECT COUNT(DISTINCT patient.patient_id) AS HIV_Negative FROM patient JOIN visit ON patient.patient_id = visit.patient_id JOIN encounter ON encounter.visit_id = visit.visit_id JOIN obs ON encounter.encounter_id = obs.encounter_id WHERE patient.voided = 0 AND visit_type_id = 2 AND encounter_type = 10 AND obs.concept_id = 165203 AND obs.value_coded = 165131")
+        #No. of patients referred for suspect cancer on initial visit and are HIV negative
+        cursor.execute("SELECT COUNT(DISTINCT referral_suspect_cancer.patient_id) AS no_of_patients, DATE_FORMAT(referral_suspect_cancer.date_started, '%m-%Y') AS visit_month, referral_suspect_cancer.visit_location_id, referral_suspect_cancer.visit_location_name FROM (SELECT * FROM visit_data_vw WHERE obs_value_concept_id = 165183) referral_suspect_cancer JOIN (SELECT * FROM visit_data_vw WHERE obs_value_concept_id = 165131) not_on_art ON referral_suspect_cancer.visit_id = not_on_art.visit_id WHERE referral_suspect_cancer.visit_type_id = 2 AND referral_suspect_cancer.visit_location_retired = 0 GROUP BY visit_month, visit_location_id, visit_location_name;")
         hiv_negative = cursor.fetchall()
         print(hiv_negative)
 
         print("------------------------------------------------")
 
-        #Patients with Unknown HIV status - Initial visit
-        cursor.execute("SELECT COUNT(DISTINCT patient.patient_id) AS HIV_Unknown FROM patient JOIN visit ON patient.patient_id = visit.patient_id JOIN encounter ON encounter.visit_id = visit.visit_id JOIN obs ON encounter.encounter_id = obs.encounter_id WHERE patient.voided = 0 AND visit_type_id = 2 AND encounter_type = 10 AND obs.concept_id = 165203 AND obs.value_coded = 165132")
+        #No. of patients referred for suspect cancer on initial visit with Unknown HIV status
+        cursor.execute("SELECT COUNT(DISTINCT referral_suspect_cancer.patient_id) AS no_of_patients, DATE_FORMAT(referral_suspect_cancer.date_started, '%m-%Y') AS visit_month, referral_suspect_cancer.visit_location_id, referral_suspect_cancer.visit_location_name FROM (SELECT * FROM visit_data_vw WHERE obs_value_concept_id = 165183) referral_suspect_cancer JOIN (SELECT * FROM visit_data_vw WHERE obs_value_concept_id = 165132) not_on_art ON referral_suspect_cancer.visit_id = not_on_art.visit_id WHERE referral_suspect_cancer.visit_type_id = 2 AND referral_suspect_cancer.visit_location_retired = 0 GROUP BY visit_month, visit_location_id, visit_location_name;")
         hiv_unknown = cursor.fetchall()
         print(hiv_unknown)
 
         print("------------------------------------------------")
 
-        #Patients who are not on ART - Initial visit
-        cursor.execute("SELECT COUNT(DISTINCT patient.patient_id) AS Not_on_ART FROM patient JOIN visit ON patient.patient_id = visit.patient_id JOIN encounter ON encounter.visit_id = visit.visit_id JOIN obs ON encounter.encounter_id = obs.encounter_id WHERE patient.voided = 0 AND visit_type_id = 2 AND encounter_type = 10 AND obs.concept_id = 165223 AND obs.value_coded = 165127;")
+        #No. of patients referred for suspect cancer on initial visit and are not on ART
+        cursor.execute("SELECT COUNT(DISTINCT referral_suspect_cancer.patient_id) AS no_of_patients, DATE_FORMAT(referral_suspect_cancer.date_started, '%m-%Y') AS visit_month, referral_suspect_cancer.visit_location_id, referral_suspect_cancer.visit_location_name FROM (SELECT * FROM visit_data_vw WHERE obs_value_concept_id = 165183) referral_suspect_cancer JOIN (SELECT * FROM visit_data_vw WHERE obs_value_concept_id = 165127) not_on_art ON referral_suspect_cancer.visit_id = not_on_art.visit_id WHERE referral_suspect_cancer.visit_type_id = 2 AND referral_suspect_cancer.visit_location_retired = 0 GROUP BY visit_month, visit_location_id, visit_location_name;")
         not_on_art = cursor.fetchall()
         print(not_on_art)
 
         print("------------------------------------------------")
 
-        #Patients who are not on ART and were referred for suspect cancer on initial visit by month and facility
-        cursor.execute("SELECT COUNT(DISTINCT a.patient_id) AS Patients, DATE_FORMAT(a.date_started, '%m-%Y') AS date,a.visit_location_id, a.visit_location_name FROM (SELECT * FROM visit_data_vw WHERE obs_value_concept_id = 165183) a JOIN (SELECT * FROM visit_data_vw WHERE obs_value_concept_id = 165127) b ON a.visit_id = b.visit_id WHERE a.visit_type_id = 2 GROUP BY date, visit_location_id, visit_location_name")
-        not_on_art_referred = cursor.fetchall()
-        print(not_on_art_referred)
-
-        #HIV+ - on ART <= 24
-        cursor.execute("SELECT COUNT(DISTINCT a.patient_id) AS _24 FROM (SELECT patient_id, visit_id FROM visit_data_vw WHERE obs_value_concept_id = 165183) a JOIN (SELECT patient_id, visit_id,visit_type_id,visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) b ON a.visit_id = b.visit_id WHERE b.visit_type_id=2 AND b.visit_location_retired=0 AND a.patient_id IN (SELECT patient_id FROM (SELECT patient_data_vw.patient_id, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw HAVING age <= 24) c)")
+        #No. of patients referred for suspect cancer on initial visit who are HIV +ve, on ART and age <= 24
+        cursor.execute("SELECT COUNT(DISTINCT patient_id) AS no_of_patients, visit_location_id, visit_location_name, DATE_FORMAT(date_started, '%m-%Y') AS visit_month FROM (SELECT patient_info.patient_id, visit_info.visit_location_id, visit_info.visit_location_name, visit_info.date_started, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw patient_info JOIN (select referral_suspect_cancer.patient_id, date_started, visit_location_name, visit_location_id FROM (SELECT patient_id, visit_id, date_started, visit_location_id, visit_location_name FROM visit_data_vw WHERE obs_value_concept_id = 165183) referral_suspect_cancer JOIN (SELECT patient_id, visit_id, visit_type_id, visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) not_on_art ON referral_suspect_cancer.visit_id = not_on_art.visit_id WHERE not_on_art.visit_type_id = 2 AND not_on_art.visit_location_retired = 0) visit_info ON patient_info.patient_id = visit_info.patient_id HAVING age <= 24) patient_visit_info GROUP BY visit_month, visit_location_id")
         on_art_24 = cursor.fetchall()
         print(on_art_24)
 
-        #HIV+ - on ART 25-29
-        cursor.execute("SELECT COUNT(DISTINCT a.patient_id) AS 25_29 FROM (SELECT patient_id, visit_id FROM visit_data_vw WHERE obs_value_concept_id = 165183) a JOIN (SELECT patient_id, visit_id,visit_type_id,visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) b ON a.visit_id = b.visit_id WHERE b.visit_type_id=2 AND b.visit_location_retired=0 AND a.patient_id IN (SELECT patient_id FROM (SELECT patient_data_vw.patient_id, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw HAVING age between 25 and 29) c)")
+        #No. of patients who are HIV +ve, on ART and age between 25-29
+        cursor.execute("SELECT COUNT(DISTINCT patient_id) AS no_of_patients, visit_location_id, visit_location_name, DATE_FORMAT(date_started, '%m-%Y') AS visit_month FROM (SELECT patient_info.patient_id, visit_info.visit_location_id, visit_info.visit_location_name, visit_info.date_started, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw patient_info JOIN (select referral_suspect_cancer.patient_id, date_started, visit_location_name, visit_location_id FROM (SELECT patient_id, visit_id, date_started, visit_location_id, visit_location_name FROM visit_data_vw WHERE obs_value_concept_id = 165183) referral_suspect_cancer JOIN (SELECT patient_id, visit_id, visit_type_id, visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) not_on_art ON referral_suspect_cancer.visit_id = not_on_art.visit_id WHERE not_on_art.visit_type_id = 2 AND not_on_art.visit_location_retired = 0) visit_info ON patient_info.patient_id = visit_info.patient_id HAVING age BETWEEN 25 AND 29) patient_visit_info GROUP BY visit_month, visit_location_id")
         on_art_25_29 = cursor.fetchall()
         print(on_art_25_29)
 
-        #HIV+ - on ART 30-34
-        cursor.execute("SELECT COUNT(DISTINCT a.patient_id) AS 30_34 FROM (SELECT patient_id, visit_id FROM visit_data_vw WHERE obs_value_concept_id = 165183) a JOIN (SELECT patient_id, visit_id,visit_type_id,visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) b ON a.visit_id = b.visit_id WHERE b.visit_type_id=2 AND b.visit_location_retired=0 AND a.patient_id IN (SELECT patient_id FROM (SELECT patient_data_vw.patient_id, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw HAVING age between 30 and 34) c)")
+        #No. of patients who are HIV +ve, on ART and  age between 30-34
+        cursor.execute("SELECT COUNT(DISTINCT patient_id) AS no_of_patients, visit_location_id, visit_location_name, DATE_FORMAT(date_started, '%m-%Y') AS visit_month FROM (SELECT patient_info.patient_id, visit_info.visit_location_id, visit_info.visit_location_name, visit_info.date_started, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw patient_info JOIN (select referral_suspect_cancer.patient_id, date_started, visit_location_name, visit_location_id FROM (SELECT patient_id, visit_id, date_started, visit_location_id, visit_location_name FROM visit_data_vw WHERE obs_value_concept_id = 165183) referral_suspect_cancer JOIN (SELECT patient_id, visit_id, visit_type_id, visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) not_on_art ON referral_suspect_cancer.visit_id = not_on_art.visit_id WHERE not_on_art.visit_type_id = 2 AND not_on_art.visit_location_retired = 0) visit_info ON patient_info.patient_id = visit_info.patient_id HAVING age BETWEEN 30 AND 34) patient_visit_info GROUP BY visit_month, visit_location_id")
         on_art_30_34 = cursor.fetchall()
         print(on_art_30_34)
 
-        #HIV+ - on ART 35-39
-        cursor.execute("SELECT COUNT(DISTINCT a.patient_id) AS 35_39 FROM (SELECT patient_id, visit_id FROM visit_data_vw WHERE obs_value_concept_id = 165183) a JOIN (SELECT patient_id, visit_id,visit_type_id,visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) b ON a.visit_id = b.visit_id WHERE b.visit_type_id=2 AND b.visit_location_retired=0 AND a.patient_id IN (SELECT patient_id FROM (SELECT patient_data_vw.patient_id, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw HAVING age between 35 and 39) c)")
+        #No. of patients who are HIV +ve, on ART and  age between 35-39
+        cursor.execute("SELECT COUNT(DISTINCT patient_id) AS no_of_patients, visit_location_id, visit_location_name, DATE_FORMAT(date_started, '%m-%Y') AS visit_month FROM (SELECT patient_info.patient_id, visit_info.visit_location_id, visit_info.visit_location_name, visit_info.date_started, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw patient_info JOIN (select referral_suspect_cancer.patient_id, date_started, visit_location_name, visit_location_id FROM (SELECT patient_id, visit_id, date_started, visit_location_id, visit_location_name FROM visit_data_vw WHERE obs_value_concept_id = 165183) referral_suspect_cancer JOIN (SELECT patient_id, visit_id, visit_type_id, visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) not_on_art ON referral_suspect_cancer.visit_id = not_on_art.visit_id WHERE not_on_art.visit_type_id = 2 AND not_on_art.visit_location_retired = 0) visit_info ON patient_info.patient_id = visit_info.patient_id HAVING age BETWEEN 35 AND 39) patient_visit_info GROUP BY visit_month, visit_location_id")
         on_art_35_39 = cursor.fetchall()
         print(on_art_35_39)
 
-        #HIV+ - on ART 40-49
-        cursor.execute("SELECT COUNT(DISTINCT a.patient_id) AS 40_49 FROM (SELECT patient_id, visit_id FROM visit_data_vw WHERE obs_value_concept_id = 165183) a JOIN (SELECT patient_id, visit_id,visit_type_id,visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) b ON a.visit_id = b.visit_id WHERE b.visit_type_id=2 AND b.visit_location_retired=0 AND a.patient_id IN (SELECT patient_id FROM (SELECT patient_data_vw.patient_id, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw HAVING age between 40 and 49) c)")
+        #No. of patients who are HIV +ve, on ART and  age between 40-49
+        cursor.execute("SELECT COUNT(DISTINCT patient_id) AS no_of_patients, visit_location_id, visit_location_name, DATE_FORMAT(date_started, '%m-%Y') AS visit_month FROM (SELECT patient_info.patient_id, visit_info.visit_location_id, visit_info.visit_location_name, visit_info.date_started, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw patient_info JOIN (select referral_suspect_cancer.patient_id, date_started, visit_location_name, visit_location_id FROM (SELECT patient_id, visit_id, date_started, visit_location_id, visit_location_name FROM visit_data_vw WHERE obs_value_concept_id = 165183) referral_suspect_cancer JOIN (SELECT patient_id, visit_id, visit_type_id, visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) not_on_art ON referral_suspect_cancer.visit_id = not_on_art.visit_id WHERE not_on_art.visit_type_id = 2 AND not_on_art.visit_location_retired = 0) visit_info ON patient_info.patient_id = visit_info.patient_id HAVING age BETWEEN 40 AND 49) patient_visit_info GROUP BY visit_month, visit_location_id")
         on_art_40_49 = cursor.fetchall()
         print(on_art_40_49)
 
-        #HIV+ - on ART 50-59
-        cursor.execute("SELECT COUNT(DISTINCT a.patient_id) AS 50_59 FROM (SELECT patient_id, visit_id FROM visit_data_vw WHERE obs_value_concept_id = 165183) a JOIN (SELECT patient_id, visit_id,visit_type_id,visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) b ON a.visit_id = b.visit_id WHERE b.visit_type_id=2 AND b.visit_location_retired=0 AND a.patient_id IN (SELECT patient_id FROM (SELECT patient_data_vw.patient_id, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw HAVING age between 50 and 59) c)")
+        #No. of patients who are HIV +ve, on ART and  age between 50-59
+        cursor.execute("SELECT COUNT(DISTINCT patient_id) AS no_of_patients, visit_location_id, visit_location_name, DATE_FORMAT(date_started, '%m-%Y') AS visit_month FROM (SELECT patient_info.patient_id, visit_info.visit_location_id, visit_info.visit_location_name, visit_info.date_started, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw patient_info JOIN (select referral_suspect_cancer.patient_id, date_started, visit_location_name, visit_location_id FROM (SELECT patient_id, visit_id, date_started, visit_location_id, visit_location_name FROM visit_data_vw WHERE obs_value_concept_id = 165183) referral_suspect_cancer JOIN (SELECT patient_id, visit_id, visit_type_id, visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) not_on_art ON referral_suspect_cancer.visit_id = not_on_art.visit_id WHERE not_on_art.visit_type_id = 2 AND not_on_art.visit_location_retired = 0) visit_info ON patient_info.patient_id = visit_info.patient_id HAVING age BETWEEN 50 AND 59) patient_visit_info GROUP BY visit_month, visit_location_id")
         on_art_50_59 = cursor.fetchall()
         print(on_art_50_59)
 
-        #HIV+ - on ART 60+
-        cursor.execute("SELECT COUNT(DISTINCT a.patient_id) AS 60_ FROM (SELECT patient_id, visit_id FROM visit_data_vw WHERE obs_value_concept_id = 165183) a JOIN (SELECT patient_id, visit_id,visit_type_id,visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) b ON a.visit_id = b.visit_id WHERE b.visit_type_id=2 AND b.visit_location_retired=0 AND a.patient_id IN (SELECT patient_id FROM (SELECT patient_data_vw.patient_id, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw HAVING age >= 60) c)")
+        #No. of patients who are HIV +ve, on ART and  age >= 60
+        cursor.execute("SELECT COUNT(DISTINCT patient_id) AS no_of_patients, visit_location_id, visit_location_name, DATE_FORMAT(date_started, '%m-%Y') AS visit_month FROM (SELECT patient_info.patient_id, visit_info.visit_location_id, visit_info.visit_location_name, visit_info.date_started, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_vw patient_info JOIN (select referral_suspect_cancer.patient_id, date_started, visit_location_name, visit_location_id FROM (SELECT patient_id, visit_id, date_started, visit_location_id, visit_location_name FROM visit_data_vw WHERE obs_value_concept_id = 165183) referral_suspect_cancer JOIN (SELECT patient_id, visit_id, visit_type_id, visit_location_retired FROM visit_data_vw WHERE obs_value_concept_id = 165126) not_on_art ON referral_suspect_cancer.visit_id = not_on_art.visit_id WHERE not_on_art.visit_type_id = 2 AND not_on_art.visit_location_retired = 0) visit_info ON patient_info.patient_id = visit_info.patient_id HAVING age >= 60) patient_visit_info GROUP BY visit_month, visit_location_id")
         on_art_60 = cursor.fetchall()
         print(on_art_60)
-
+             
 except Error as e:
     print("Error while connecting to database: ", e)
 finally:
