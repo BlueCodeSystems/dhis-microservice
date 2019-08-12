@@ -250,9 +250,9 @@ try:
         on_art_30_34 = cursor.fetchall()
         print(on_art_30_34)
 
-        print("----------------------- 35 - 39 -------------------------")
+        print("----------------------- 30 - 34 -------------------------")
 
-        #No. of patients referred for suspect cancer on initial visit who are HIV +ve, on ART and age between 35-39
+        #No. of patients referred for suspect cancer on initial visit who are HIV +ve, on ART and age between 30-34
         cursor.execute("SELECT COUNT(DISTINCT patient_id) AS no_of_patients, visit_location_id, visit_location_name, DATE_FORMAT(date_started, '%m-%Y') AS visit_month FROM (SELECT patient_info.patient_id, visit_info.visit_location_id, visit_info.visit_location_name, visit_info.date_started, TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age FROM patient_data_matvw patient_info JOIN (SELECT referral_suspect_cancer.patient_id, referral_suspect_cancer.date_started, referral_suspect_cancer.visit_location_name, referral_suspect_cancer.visit_location_id FROM (SELECT patient_id, visit_id, visit_data_matvw.date_started, visit_location_id, visit_data_matvw.visit_location_name FROM visit_data_matvw WHERE obs_value_concept_id = 165183) referral_suspect_cancer JOIN (SELECT patient_id, visit_id, visit_type_id, visit_location_retired FROM visit_data_matvw WHERE obs_value_concept_id = 165126) on_art ON referral_suspect_cancer.visit_id = on_art.visit_id JOIN (SELECT patient_id, visit_id, visit_type_id, visit_location_retired FROM visit_data_matvw WHERE obs_value_concept_id = 165125) hiv_positive ON referral_suspect_cancer.visit_id = hiv_positive.visit_id WHERE on_art.visit_type_id = 6 AND on_art.visit_location_retired = 0) visit_info ON patient_info.patient_id = visit_info.patient_id HAVING age BETWEEN 35 AND 39) patient_visit_info GROUP BY visit_month, visit_location_id, visit_location_name")
         on_art_35_39 = cursor.fetchall()
         print(on_art_35_39)

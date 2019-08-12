@@ -56,7 +56,6 @@ try:
             return patientAges(patientList(indicators), lowerAgeLimit, upperAgeLimit)
 
 
-
     # Function calls
 
     #No. of patients referred for suspect cancer on one year follow-up visit with Unknown HIV status
