@@ -26,10 +26,12 @@ try:
 
     #Get patient ids from list of visit ids
     def patientList(visitIds):
-        if (len(visitIds) > 1):
-            query = 'SELECT DISTINCT patient_id FROM visit_data_matvw WHERE visit_id IN {}'.format(tuple(visitIds))
-        else:
+        if (len(visitIds) == 1):
             query = 'SELECT DISTINCT patient_id FROM visit_data_matvw WHERE visit_id = {}'.format(visitIds[0])
+        elif (len(visitIds) == 0):
+            return []
+        else:
+            query = 'SELECT DISTINCT patient_id FROM visit_data_matvw WHERE visit_id IN {}'.format(tuple(visitIds))
         cursor.execute(query)
         patientIds = cursor.fetchall()
         result = []
@@ -39,10 +41,12 @@ try:
 
     # Filter patients by age
     def patientAges(patientIds, lowerLimit, upperLimit):
-        if (len(patientIds) > 1):
-            query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id IN {} AND TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) BETWEEN {} AND {}'.format(tuple(patientIds), lowerLimit, upperLimit)
-        else:
+        if (len(patientIds) == 1):
             query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id = {} AND TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) BETWEEN {} AND {}'.format(patientIds[0], lowerLimit, upperLimit)
+        elif (len(patientIds) == 0):
+            return 0
+        else:
+            query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id IN {} AND TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) BETWEEN {} AND {}'.format(tuple(patientIds), lowerLimit, upperLimit)
         cursor.execute(query)
         patientsInRange = cursor.fetchall()
         result = []
@@ -61,14 +65,9 @@ try:
             return len(patients)
         else: 
             return patientAges(patients, lowerAgeLimit, upperAgeLimit)
-
-
-
-
-
-    #Suspect cancer - initial visit
     
-    def indicatorRow(listOfIndicators, visitTypeId, visitLocationId, visitMonth):
+    #Get patient counts for a particular visit type
+    def visitTypeFunc(listOfIndicators, visitTypeId, visitLocationId, visitMonth):
         concepts1 = listOfIndicators.copy()
         concepts1.extend([{'question':165203, 'answer':165132}])
         print('Hiv unknown - {}'.format(patientCount(concepts1, visitTypeId, visitLocationId, visitMonth)))
@@ -120,10 +119,55 @@ try:
         concepts1 = listOfIndicators.copy()
         print('Total suspect cancer - {}'.format(patientCount(concepts1, visitTypeId, visitLocationId, visitMonth)))
 
-    print('###############################')
+    # Get patient counts for each of the three visit types
+    def indicatorRows(indicators, visitLocationId, visitMonth):
+        print('Initial Visit')
+        visitTypeFunc(indicators, 2, visitLocationId, visitMonth)
+        print('-------------------------------------')
+        print('One Year Follow-up')
+        visitTypeFunc(indicators, 5, visitLocationId, visitMonth)
+        print('-------------------------------------')
+        print('Routine Visit')
+        visitTypeFunc(indicators, 6, visitLocationId, visitMonth)
+        print('-------------------------------------')
 
-    indicatorRow([{'question':165182, 'answer':165183}], 5, 5314, '08-2019')
+     
+    #Function Calls
+    
+    print('\nNumber of clients referred for suspect cancer')
+    indicatorRows([{'question':165182, 'answer':165183}], 5314, '08-2019')
 
+    print('\nNumber of clients who received a VIA screening')
+    indicatorRows([{'question':165155, 'answer':1}], 5314, '08-2019')
+
+#    print('Total number of clients seen this month (1+2)')
+#    indicatorRows([{'question':165182, 'answer':165183}], 5314, '08-2019')
+
+    print('\nNumber of clients with positive VIA result')
+    indicatorRows([{'question':165155, 'answer':1}], 5314, '08-2019')
+    
+    '''
+    print('Number of VIA+ve clients with cryotherapy/thermal coagulation performed on the same day  (single visit approach)')
+    indicatorRows([{'question':165155, 'answer':1}], 5314, '08-2019')
+
+    print('Number of clients with previously delayed cryotherapy/thermal coagulation performed this month')
+    indicatorRows([{'question':165155, 'answer':1}], 5314, '08-2019')
+
+    print('Number of VIA+ve clients with cryotherapy/ thermal coagulation delayed')
+    indicatorRows([{'question':165155, 'answer':1}], 5314, '08-2019')
+
+    print('Number of clients with a post-treatment complication')
+    indicatorRows([{'question':165155, 'answer':1}], 5314, '08-2019')
+
+    print('Number of VIA+ve clients referred for lesions ineligible for cryotherapy or thermal coagulation (excluding suspect cancer)')
+    indicatorRows([{'question':165155, 'answer':1}], 5314, '08-2019')
+
+    print('Number of clients who received a PAP smear')
+    indicatorRows([{'question':165155, 'answer':1}], 5314, '08-2019')
+
+    print('Number of clients with abnormal PAPs')
+    indicatorRows([{'question':165155, 'answer':1}], 5314, '08-2019')
+    '''
 
 except Error as e:
     print('Error while connecting to database: ', e)
