@@ -1,5 +1,6 @@
 import mysql.connector
 from mysql.connector import Error
+import variables
 
 try:
     connection = mysql.connector.connect(host = '34.240.241.171', database = 'openmrs', user = 'smartcerv', password = 'smartcerv')
@@ -132,15 +133,15 @@ try:
 
     # Get patient counts for each of the three visit types
     def indicatorRows(indicators, visitTypeIds, visitLocationId, visitMonth):
-#        print('Initial Visit')
+        # Initial Visit - visit_type_id = 2
         initialVisit = visitTypeFunc(indicators, visitTypeIds[0], visitLocationId, visitMonth)
-#        print('-------------------------------------')
-#        print('One Year Follow-up')
+
+        # One Year Follow-up - visit_type_id = 5
         oneYearFollowUp = visitTypeFunc(indicators, visitTypeIds[1], visitLocationId, visitMonth)
-#        print('-------------------------------------')
-#        print('Routine Visit')
+
+        # Routine Visit - visit_type_id = 6
         routineVisit = visitTypeFunc(indicators, visitTypeIds[2], visitLocationId, visitMonth)
-#        print('-------------------------------------')
+        # return result as a dictionary
         result = {'initialVisit':initialVisit, 'oneYearFollowUp':oneYearFollowUp, 'routineVisit':routineVisit}
         return result
 
@@ -153,6 +154,7 @@ try:
             result[key] = sumOfLists
         return result
 
+    # Sum up the corresponding values in several lists
     def sumRows(lists):
         result = [sum(x) for x in zip(*lists)]
         return result
@@ -165,53 +167,53 @@ try:
 
         print('\nNumber of clients referred for suspect cancer')
         suspectCancer = indicatorRows([{'question':165182, 'answer':165183}], [2, 5, 6], location, month)
-        print(suspectCancer)
+#        print(suspectCancer)
         result.append(suspectCancer)
 
         print('\nNumber of clients who received a VIA screening')
         viaScreening = indicatorRows([{'question':165155, 'answer':1}], [2, 5, 6], location, month)
-        print(viaScreening)
+#        print(viaScreening)
         result.append(viaScreening)
 
         print('\nTotal number of clients seen this month (1+2)')
         suspectCancerViaScreening = aggregate(suspectCancer, viaScreening)
-        print(suspectCancerViaScreening)
+#        print(suspectCancerViaScreening)
         result.append(suspectCancerViaScreening)
         
         print('\nNumber of clients with positive VIA result')
         positiveVIA = indicatorRows([{'question':165160, 'answer':165162}], [2, 5, 6], location, month)
-        print(positiveVIA)
+#        print(positiveVIA)
         result.append(positiveVIA)
         
         print('\nNumber of VIA+ve clients with cryotherapy/thermal coagulation performed on the same day (single visit approach)')
         cryoThermal = indicatorRows([{'question':165219, 'answer':165174, 'answer1':165175}], [2, 5, 6], location, month)
-        print(cryoThermal)
+#        print(cryoThermal)
         result.append(cryoThermal)
         
         print('\nNumber of clients with previously delayed cryotherapy/thermal coagulation performed this month')
         prevDelayedCryoThermal = indicatorRows([], [3, 3, 3], location, month)
-        print(prevDelayedCryoThermal['initialVisit'])
+#        print(prevDelayedCryoThermal['initialVisit'])
         result.append(prevDelayedCryoThermal['initialVisit'])
         
         print('\nTotal number of clients treated with cryotherapy/thermal coagulation (5+6)')
         listOfRows = [cryoThermal['initialVisit'], cryoThermal['oneYearFollowUp'], cryoThermal['routineVisit'], prevDelayedCryoThermal['initialVisit']]
         totalCryoThermal = sumRows(listOfRows)
-        print(totalCryoThermal)
+#        print(totalCryoThermal)
         result.append(totalCryoThermal)
         
         print('\nNumber of VIA+ve clients with cryotherapy/thermal coagulation delayed')
         cryoThermalDelayed = indicatorRows([{'question':165219, 'answer':165176, 'answer1':165177}], [2, 5, 6], location, month)
-        print(cryoThermalDelayed)
+#        print(cryoThermalDelayed)
         result.append(cryoThermalDelayed)
     
         print('\nNumber of clients with a post-treatment complication')
         ptComplication = indicatorRows([{'question':165143, 'answer':165144, 'answer1':165145, 'answer2':165146}], [2, 5, 6], location, month)
-        print(ptComplication)
+#        print(ptComplication)
         result.append(ptComplication)
         
         print('\nNumber of VIA+ve clients referred for lesions ineligible for cryotherapy or thermal coagulation (excluding suspect cancer)')
         lesions = indicatorRows([{'question':165182, 'answer':165184}], [2, 5, 6],  location, month)
-        print(lesions)
+#        print(lesions)
         result.append(lesions)
 
         valuesList = []
@@ -227,8 +229,6 @@ try:
  
     print('Suspect cancer initial visit hiv unknown - {}'.format(indicatorList(5314, '08-2019', (0, 0))))
     print('Via screening initial visit total - {}'.format(indicatorList(5314, '08-2019', (3, 12))))
-    
-    
 
     
 except Error as e:
