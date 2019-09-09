@@ -3,6 +3,8 @@ from mysql.connector import Error
 import json
 import requests
 import datetime
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     connection = mysql.connector.connect(host = '34.240.241.171', database = 'openmrs', user = 'smartcerv', password = 'smartcerv')
@@ -10,16 +12,17 @@ try:
         db_Info = connection.get_server_info()
         print('Connected to database ', db_Info)
         cursor = connection.cursor(dictionary=True)
-        cursor.execute('CALL RefreshMaterializedViews()')
+    cursor.execute('CALL RefreshMaterializedViews()')
 
     # Function definitions
 
     #Get visit ids that satisfy a given indicator
     def visitList(indicator, visitTypeId, locationId, visitMonth): 
         strings = []
+        lesionsConceptId = 165184
         for key in indicator:
             if (key != 'question'):
-                if (165184 in indicator.values()):
+                if (lesionsConceptId in indicator.values()):
                     strings.append('obs_value_concept_id != {}'.format(indicator[key] - 1))
                 else:
                     strings.append('obs_value_concept_id = {}'.format(indicator[key]))
@@ -30,11 +33,11 @@ try:
         result = []
         for visit in visitIdsList:
             result.append(visit['visit_id'])
-        return sorted(result)
+        return result
 
     #Get patients that satisfy all indicators
     def listIntersection(args):
-        return sorted(list(set(args[0]).intersection(*args)))
+        return list(set(args[0]).intersection(*args))
 
     #Get patient ids from list of visit ids
     def patientList(visitIds):
@@ -49,7 +52,7 @@ try:
         result = []
         for visit in patientIds:
             result.append(visit['patient_id'])
-        return sorted(result)
+        return result
 
     # Filter patients by age
     def patientAges(patientIds, lowerLimit, upperLimit):
@@ -80,7 +83,7 @@ try:
     
     #Get patient counts for a particular visit type
     def visitTypeFunc(listOfIndicators, visitTypeId, visitLocationId, visitMonth):
-        
+
         concepts1 = listOfIndicators.copy()
         concepts1.extend([{'question':165203, 'answer':165132}])
         hivUnknown = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth)
@@ -165,51 +168,51 @@ try:
     # Get counts for each of the indicators
     def indicatorList(location, month):
         result = {}
-        
+        print('Start')
         #Number of clients referred for suspect cancer
         suspectCancer = indicatorRows([{'question':165182, 'answer':165183}], [2, 5, 6], location, month)
         result['suspectCancer'] = suspectCancer
-
+        print('Checkpoint 1')
         #Number of clients who received a VIA screening
         viaScreening = indicatorRows([{'question':165155, 'answer':1}], [2, 5, 6], location, month)
         result['viaScreening'] = viaScreening
-
+        print('Checkpoint 2')
         #Total number of clients seen this month (1+2)
         suspectCancerViaScreening = aggregate(suspectCancer, viaScreening)
         result['suspectCancerViaScreening'] = suspectCancerViaScreening
-        
+        print('Checkpoint 3')
         #Number of clients with positive VIA result
         positiveVIA = indicatorRows([{'question':165160, 'answer':165162}], [2, 5, 6], location, month)
         result['positiveVIA'] = positiveVIA
-        
+        print('Checkpoint 4')
         #Number of VIA+ve clients with cryotherapy/thermal coagulation performed on the same day (single visit approach)
         cryoThermal = indicatorRows([{'question':165219, 'answer':165174, 'answer1':165175}], [2, 5, 6], location, month)
         result['cryoThermal'] = cryoThermal
-        
+        print('Checkpoint 5')
         #Number of clients with previously delayed cryotherapy/thermal coagulation performed this month
         prevDelayedCryoThermal = indicatorRows([], [3, 3, 3], location, month)
         del prevDelayedCryoThermal['oneYearFollowUp']
         del prevDelayedCryoThermal['routineVisit']
         result['prevDelayedCryoThermal'] = prevDelayedCryoThermal
-        
+        print('Checkpoint 6')
         #Total number of clients treated with cryotherapy/thermal coagulation (5+6)
         listOfRows = [cryoThermal['initialVisit'], cryoThermal['oneYearFollowUp'], cryoThermal['routineVisit'], prevDelayedCryoThermal['initialVisit']]
         totalCryoThermal = {}
         totalCryoThermal['initialVisit'] = sumRows(listOfRows)
         result['totalCryoThermal'] = totalCryoThermal
-        
+        print('Checkpoint 7')
         #Number of VIA+ve clients with cryotherapy/thermal coagulation delayed
         cryoThermalDelayed = indicatorRows([{'question':165219, 'answer':165176, 'answer1':165177}], [2, 5, 6], location, month)
         result['cryoThermalDelayed'] = cryoThermalDelayed
-    
+        print('Checkpoint 8')
         #Number of clients with a post-treatment complication
         ptComplication = indicatorRows([{'question':165143, 'answer':165144, 'answer1':165145, 'answer2':165146}], [2, 5, 6], location, month)
         result['ptComplication'] = ptComplication
-         
+        print('Checkpoint 9')
         #Number of VIA+ve clients referred for lesions ineligible for cryotherapy or thermal coagulation (excluding suspect cancer)')
         lesions = indicatorRows([{'question':165182, 'answer':165184}], [2, 5, 6],  location, month)
         result['lesions'] = lesions
-
+        print('Checkpoint 10')
         valuesList = []
         for item in result:
             if (isinstance(item, dict)):
@@ -299,11 +302,11 @@ try:
                 "dataValues": dataElements
                 }
     
-    url = 'https://dhis.zeir.smartregister.org/api/26/dataValueSets/'
-    dhisCredentials = ('bluecode', 'User2308')
-    jsonPayload = generateJsonPayload(5314,'07-2019')
-    response = requests.post(url, auth = dhisCredentials, json = jsonPayload, headers = {"Content-Type":"application/json"})
-    print(response.json())
+    url = 'https://dhis.bluecodeltd.com/api/dataValueSets/'
+    dhisCredentials = ('admin', 'district')
+    jsonPayload = generateJsonPayload(5314,'08-2019')
+    #response = requests.post(url, auth = dhisCredentials, json = jsonPayload, headers = {"Content-Type":"application/json"})
+    #print(response.json())
   
 except Error as e:
     print('Error while connecting to database: ', e)
