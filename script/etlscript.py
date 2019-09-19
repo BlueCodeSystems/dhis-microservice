@@ -10,8 +10,8 @@ from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 # Function definitions
 
 #Get visit ids that satisfy a given indicator
-def visitList(indicator, visitTypeId, locationId, visitMonth, conn):
-    cursor = conn.cursor(dictionary = True)
+def visitList(indicator, visitTypeId, locationId, visitMonth, connection):
+    cursor = connection.cursor(dictionary = True)
     strings = []
     lesionsConceptId = 165184
     for key in indicator:
@@ -24,6 +24,7 @@ def visitList(indicator, visitTypeId, locationId, visitMonth, conn):
     query = "SELECT visit_id FROM visit_data_matvw WHERE obs_concept_id = {} AND ({}) AND visit_type_id = {} AND visit_location_id = {} AND DATE_FORMAT(date_started, '%m-%Y') = '{}' AND visit_location_retired = 0".format(indicator['question'], answers, visitTypeId, locationId, visitMonth)
     cursor.execute(query)
     visitIdsList = cursor.fetchall()
+    cursor.close()
     result = []
     for visit in visitIdsList:
         result.append(visit['visit_id'])
@@ -34,16 +35,17 @@ def listIntersection(args):
     return list(set(args[0]).intersection(*args))
 
 #Get patient ids from list of visit ids
-def patientList(visitIds, conn):
-    cursor = conn.cursor(dictionary = True)
+def patientList(visitIds, connection):
     if (len(visitIds) == 1):
         query = 'SELECT DISTINCT patient_id FROM visit_data_matvw WHERE visit_id = {}'.format(visitIds[0])
     elif (len(visitIds) == 0):
         return []
     else:
         query = 'SELECT DISTINCT patient_id FROM visit_data_matvw WHERE visit_id IN {}'.format(tuple(visitIds))
+    cursor = connection.cursor(dictionary = True)
     cursor.execute(query)
     patientIds = cursor.fetchall()
+    cursor.close()
     result = []
     for visit in patientIds:
         result.append(visit['patient_id'])
@@ -60,71 +62,72 @@ def patientAges(patientIds, conn, lowerLimit, upperLimit):
     cursor = conn.cursor(dictionary = True)
     cursor.execute(query)
     patientsInRange = cursor.fetchall()
+    cursor.close()
     result = []
     for visit in patientsInRange:
         result.append(visit['patient_id'])
     return result[0]
 
 # Aggregated function call
-def patientCount(questionAnswer, visitTypeId, locationId, visitMonth, conn, lowerAgeLimit = -1, upperAgeLimit = -1):
+def patientCount(questionAnswer, visitTypeId, locationId, visitMonth, connection, lowerAgeLimit = -1, upperAgeLimit = -1):
     listOfVisits = []
     #cursor = conn.cursor(dictionary = True)
     for questAns in questionAnswer:
-        listOfVisits.append(visitList(questAns, visitTypeId, locationId, visitMonth, conn))
+        listOfVisits.append(visitList(questAns, visitTypeId, locationId, visitMonth, connection))
     indicators = listIntersection(listOfVisits)
-    patients = patientList(indicators, conn)
+    patients = patientList(indicators, connection)
     if (lowerAgeLimit == -1 or upperAgeLimit == -1):
         return len(patients)
     else: 
-        result = patientAges(patients, conn, lowerAgeLimit, upperAgeLimit)
+        result = patientAges(patients, connection, lowerAgeLimit, upperAgeLimit)
         #cursor.close()
         return result
 
 #Get patient counts for a particular visit type
-def visitTypeFunc(listOfIndicators, visitTypeId, visitLocationId, visitMonth, conn):
+def visitTypeFunc(listOfIndicators, visitTypeId, visitLocationId, visitMonth, connection):
     concepts1 = listOfIndicators.copy()
     concepts1.extend([{'question':165203, 'answer':165132}])
-    hivUnknown = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, conn)
+    hivUnknown = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection)
 
     concepts1 = listOfIndicators.copy()
     concepts1.extend([{'question':165203, 'answer':165131}])
-    hivNegative = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, conn)
+    hivNegative = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection)
 
     concepts1 = listOfIndicators.copy()
     concepts1.extend([{'question':165203, 'answer':165125}])
-    hivPositive = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, conn)       
+    hivPositive = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection)       
 
     concepts1 = listOfIndicators.copy()
     concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165127}])
-    notOnArt = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, conn)
+    notOnArt = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection)
 
     concepts1 = listOfIndicators.copy()
     concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onARTUnder24 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, conn, 0, 24)
+    onARTUnder24 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 0, 24)
 
     concepts1 = listOfIndicators.copy()
     concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onART_25_29 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, conn, 25, 29)
+    onART_25_29 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 25, 29)
 
     concepts1 = listOfIndicators.copy()
     concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onART_30_34 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, conn, 30, 34)
+    onART_30_34 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 30, 34)
 
     concepts1 = listOfIndicators.copy()
     concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onART_35_39 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, conn, 35, 39)
+    onART_35_39 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 35, 39)
 
     concepts1 = listOfIndicators.copy()
     concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onART_40_49 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, conn, 40, 49)
+    onART_40_49 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 40, 49)
 
     concepts1 = listOfIndicators.copy()
     concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onART_50_59 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, conn, 50, 59)
+    onART_50_59 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 50, 59)
 
     concepts1 = listOfIndicators.copy()
     concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onARTOver60 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, conn, 60, 110)
+    onARTOver60 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 60, 110)
 
     totalOnART = onARTUnder24 + onART_25_29 + onART_30_34 + onART_35_39 + onART_40_49 + onART_50_59 + onARTOver60
 
@@ -251,24 +254,12 @@ def getDataElements(location, month, connection_pool):
 
     return dataElements
 
-# Get facility's dhis id
-def getOrgUnitId(location, connection_pool):
-    connection = connection_pool.get_connection()
-    if connection.is_connected():
-        cur = connection.cursor(dictionary = True)
-        query = 'SELECT facility_dhis_ou_id FROM location_data_matvw WHERE facility_id = {}'.format(location)
-        cur.execute(query)
-        facilityDhisId = cur.fetchall()
-        cur.close()
-        connection.close()
-    return facilityDhisId[0]['facility_dhis_ou_id']
-
+# Get facility information
 def getFacilityIds(cursor):
-    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0 LIMIT 100'
+    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0 LIMIT 16'
     cursor.execute(query)
     facilityIds = cursor.fetchall()
     return facilityIds
-
 
 #Get a formatted complte date for the report
 def getCompleteDate(month):
@@ -289,7 +280,7 @@ def getCompleteDate(month):
 def generateJsonPayload(args):
     connection_pool = mysql.connector.pooling.MySQLConnectionPool(
             pool_name = 'connection_pool',
-            pool_size = 11,
+            pool_size = 10,
             host = '34.240.241.171', 
             database = 'openmrs', 
             user = 'smartcerv', 
@@ -297,14 +288,13 @@ def generateJsonPayload(args):
     )
 
     location = args[0]
-    month = args[1]
+    orgUnitId = args[1]
+    month = args[2]
 
     print('Process started')
     dataSetId = 'oIZPVojzsdH'
     # Get list of dictionary values
     dataElements = getDataElements(location, month, connection_pool)
-    # Get facility's dhis id
-    orgUnitId = getOrgUnitId(location, connection_pool)
     #Calculate the complete date of the report
     completeDate = getCompleteDate(month)
     #Format the period for the report
@@ -340,11 +330,9 @@ if __name__ == '__main__':
         facilities = []
         for facility in facilityIds:
             facilityInfo.append((facility['facility_id'], facility['facility_dhis_ou_id'], month))
-            facilities.append(facility['facility_name'])
+            facilities.append(facility['facility_name'])  
 
-        
-
-        with ProcessPoolExecutor(max_workers = 16) as executor:
+        with ProcessPoolExecutor(max_workers = 12) as executor:
             jsonPayload = dict(zip(facilities, executor.map(generateJsonPayload, facilityInfo)))
 
         #jsonPayload = generateJsonPayload(5314,'08-2019')
