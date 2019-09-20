@@ -2,6 +2,7 @@ import mysql.connector
 from mysql.connector import Error
 from mysql.connector import pooling
 import json
+import sys
 import requests
 import datetime
 import time
@@ -14,15 +15,17 @@ def visitList(indicator, visitTypeId, locationId, visitMonth, connection):
     cursor = connection.cursor(dictionary = True)
     strings = []
     lesionsConceptId = 165184
+    suspectCancer = 165183
     for key in indicator:
         if (key != 'question'):
             if (lesionsConceptId in indicator.values()):
-                strings.append('obs_value_concept_id != {}'.format(indicator[key] - 1))
+                strings.append('obs_value_concept_id != {}'.format(suspectCancer))
             else:
                 strings.append('obs_value_concept_id = {}'.format(indicator[key]))
     answers = ' OR '.join(strings)
-    query = "SELECT visit_id FROM visit_data_matvw WHERE obs_concept_id = {} AND ({}) AND visit_type_id = {} AND visit_location_id = {} AND DATE_FORMAT(date_started, '%m-%Y') = '{}' AND visit_location_retired = 0".format(indicator['question'], answers, visitTypeId, locationId, visitMonth)
-    cursor.execute(query)
+    query = "SELECT visit_id FROM visit_data_matvw WHERE obs_concept_id = %s AND ({}) AND visit_type_id = %s AND visit_location_id = %s AND DATE_FORMAT(date_started, '%m-%Y') = %s AND visit_location_retired = 0".format(answers)
+    params = (indicator['question'], visitTypeId, locationId, visitMonth)
+    cursor.execute(query, params)
     visitIdsList = cursor.fetchall()
     cursor.close()
     result = []
@@ -54,13 +57,14 @@ def patientList(visitIds, connection):
 # Filter patients by age
 def patientAges(patientIds, conn, lowerLimit, upperLimit):
     if (len(patientIds) == 1):
-        query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id = {} AND identifier_type_id = 4 AND age BETWEEN {} AND {}'.format(patientIds[0], lowerLimit, upperLimit)
+        query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id = {} AND identifier_type_id = 4 AND age BETWEEN %s AND %s'.format(patientIds[0])
     elif (len(patientIds) == 0):
         return 0
     else:
-        query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id IN {} AND identifier_type_id = 4 AND age BETWEEN {} AND {}'.format(tuple(patientIds), lowerLimit, upperLimit)
+        query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id IN {} AND identifier_type_id = 4 AND age BETWEEN %s AND %s'.format(tuple(patientIds))
     cursor = conn.cursor(dictionary = True)
-    cursor.execute(query)
+    params = (lowerLimit, upperLimit)
+    cursor.execute(query, params)
     patientsInRange = cursor.fetchall()
     cursor.close()
     result = []
@@ -139,7 +143,6 @@ def visitTypeFunc(listOfIndicators, visitTypeId, visitLocationId, visitMonth, co
 
 # Get patient counts for each of the three visit types
 def indicatorRows(args):
-    print('Thread Started')
     indicators = args[0]
     visitTypeIds = args[1]
     visitLocationId = args[2]
@@ -157,27 +160,33 @@ def indicatorRows(args):
 
     # return result as a dictionary
     result = {'initialVisit': initialVisit, 'oneYearFollowUp': oneYearFollowUp, 'routineVisit': routineVisit}
-    connection.close()
+
     return result
 
 # Get counts for each of the indicators
 def indicatorList(location, month, connection_pool):
     result = {}
+    connections = []
+    for _ in range(0,8):
+        connections.append(connection_pool.get_connection())
     indicators = [
-        ([{'question':165182, 'answer':165183}], [2, 5, 6], location, month, connection_pool.get_connection()),
-        ([{'question':165155, 'answer':1}], [2, 5, 6], location, month, connection_pool.get_connection()),
-        ([{'question':165160, 'answer':165162}], [2, 5, 6], location, month, connection_pool.get_connection()),
-        ([{'question':165219, 'answer':165174, 'answer1':165175}], [2, 5, 6], location, month, connection_pool.get_connection()),
-        ([], [3, 3, 3], location, month, connection_pool.get_connection()),
-        ([{'question':165219, 'answer':165176, 'answer1':165177}], [2, 5, 6], location, month, connection_pool.get_connection()),
-        ([{'question':165143, 'answer':165144, 'answer1':165145, 'answer2':165146}], [2, 5, 6], location, month, connection_pool.get_connection()),
-        ([{'question':165182, 'answer':165184}], [2, 5, 6],  location, month, connection_pool.get_connection())
+        ([{'question':165182, 'answer':165183}], [2, 5, 6], location, month, connections[0]),
+        ([{'question':165155, 'answer':1}], [2, 5, 6], location, month, connections[1]),
+        ([{'question':165160, 'answer':165162}], [2, 5, 6], location, month, connections[2]),
+        ([{'question':165219, 'answer':165174, 'answer1':165175}], [2, 5, 6], location, month, connections[3]),
+        ([], [3, 3, 3], location, month, connections[4]),
+        ([{'question':165219, 'answer':165176, 'answer1':165177}], [2, 5, 6], location, month, connections[5]),
+        ([{'question':165143, 'answer':165144, 'answer1':165145, 'answer2':165146}], [2, 5, 6], location, month, connections[6]),
+        ([{'question':165182, 'answer':165184}], [2, 5, 6],  location, month, connections[7])
     ]
 
     with ThreadPoolExecutor(max_workers = 10) as executor:            
         indicatorNames = ('suspectCancer', 'viaScreening', 'positiveVIA', 'cryoThermal', 'prevDelayedCryoThermal', 'cryoThermalDelayed', 'ptComplication', 'lesions')
         result = dict(zip(indicatorNames, executor.map(indicatorRows, indicators)))
     
+    for connection in connections:
+        connection.close()
+
     suspectCancer = result['suspectCancer']
     viaScreening = result['viaScreening']
     suspectCancerViaScreening = aggregate(suspectCancer, viaScreening)
@@ -238,7 +247,6 @@ def getDataElements(location, month, connection_pool):
     }
     
     listOfValues = indicatorList(location, month, connection_pool)
-    #print(listOfValues)
 
     for indicator in listOfValues:
         dataElement = dataElementIds[indicator]
@@ -251,12 +259,11 @@ def getDataElements(location, month, connection_pool):
                     "categoryOptionCombo": categoryOptionCombo,
                     "value": valueList[i]
                 })
-
     return dataElements
 
 # Get facility information
 def getFacilityIds(cursor):
-    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0 LIMIT 16'
+    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0 LIMIT 2523,10'
     cursor.execute(query)
     facilityIds = cursor.fetchall()
     return facilityIds
@@ -273,7 +280,6 @@ def getCompleteDate(month):
         completeMonth = reportMonth + 1
         completeYear = reportYear
     date = datetime.datetime(completeYear, completeMonth, 1)
-
     return '{}-{}-{}'.format(date.strftime('%Y'), date.strftime('%m'), date.strftime('%d'))
 
 # Generate json payload for POST request
@@ -290,8 +296,6 @@ def generateJsonPayload(args):
     location = args[0]
     orgUnitId = args[1]
     month = args[2]
-
-    print('Process started')
     dataSetId = 'oIZPVojzsdH'
     # Get list of dictionary values
     dataElements = getDataElements(location, month, connection_pool)
@@ -309,9 +313,8 @@ def generateJsonPayload(args):
         "dataValues": dataElements
     }
 
-
 # Main thread
-if __name__ == '__main__':
+def main():
     try:
         # Refresh the materialized views
         connection = mysql.connector.connect(host = '34.240.241.171', database = 'openmrs', user = 'smartcerv', password = 'smartcerv')
@@ -325,22 +328,25 @@ if __name__ == '__main__':
         url = 'https://dhis.bluecodeltd.com/api/dataValueSets/'
         dhisCredentials = ('admin', 'district')
         start_time = round(time.time(), 4)
-        month = '08-2019'
+        month = sys.argv[1]
         facilityInfo = []
         facilities = []
         for facility in facilityIds:
             facilityInfo.append((facility['facility_id'], facility['facility_dhis_ou_id'], month))
             facilities.append(facility['facility_name'])  
 
-        with ProcessPoolExecutor(max_workers = 12) as executor:
+        with ProcessPoolExecutor(max_workers = 10) as executor:
             jsonPayload = dict(zip(facilities, executor.map(generateJsonPayload, facilityInfo)))
 
-        #jsonPayload = generateJsonPayload(5314,'08-2019')
-        print('jsonPayload: ', jsonPayload)
+        #print('jsonPayload: ', jsonPayload)
+        
+        #POST to api
+        for orgUnitPayload in jsonPayload.values():
+            response = requests.post(url, auth = dhisCredentials, json = orgUnitPayload, headers = {"Content-Type":"application/json"})
+            print(response.json())
+
         duration = round(round(time.time(), 4) - start_time)
         print('Duration: ', duration, 's')
-        #response = requests.post(url, auth = dhisCredentials, json = jsonPayload, headers = {"Content-Type":"application/json"})
-        #print(response.json())
   
     except Error as e:
         print('An error occurred: ', e)
@@ -349,3 +355,5 @@ if __name__ == '__main__':
             cursor.close()
             connection.close()
         print('Database connection closed.')
+
+if __name__ == '__main__': main()
