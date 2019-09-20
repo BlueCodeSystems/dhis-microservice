@@ -1,3 +1,4 @@
+import config
 import mysql.connector
 from mysql.connector import Error
 from mysql.connector import pooling
@@ -263,7 +264,7 @@ def getDataElements(location, month, connection_pool):
 
 # Get facility information
 def getFacilityIds(cursor):
-    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0 LIMIT 2523,10'
+    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0'
     cursor.execute(query)
     facilityIds = cursor.fetchall()
     return facilityIds
@@ -284,12 +285,21 @@ def getCompleteDate(month):
 
 # Generate json payload for POST request
 def generateJsonPayload(args):
+    '''connection_pool = mysql.connector.pooling.MySQLConnectionPool(
+            pool_name = 'connection_pool',
+            pool_size = 10,
+            host = config.OPENMRS_HOST, 
+            database = config.OPENMRS_DB, 
+            user = config.OPENMRS_USER, 
+            password = config.OPENMRS_PASS
+    )'''
+
     connection_pool = mysql.connector.pooling.MySQLConnectionPool(
             pool_name = 'connection_pool',
             pool_size = 10,
-            host = '34.240.241.171', 
-            database = 'openmrs', 
-            user = 'smartcerv', 
+            host = '34.240.241.171',
+            database = 'openmrs',
+            user = 'smartcerv',
             password = 'smartcerv'
     )
 
@@ -316,7 +326,9 @@ def generateJsonPayload(args):
 # Main thread
 def main():
     try:
+        start_time = round(time.time(), 4)
         # Refresh the materialized views
+        #connection = mysql.connector.connect(host = config.OPENMRS_HOST, database = config.OPENMRS_DB, user = config.OPENMRS_USER, password = config.OPENMRS_PASS)
         connection = mysql.connector.connect(host = '34.240.241.171', database = 'openmrs', user = 'smartcerv', password = 'smartcerv')
         if connection.is_connected():
             cursor = connection.cursor(dictionary = True)
@@ -324,10 +336,12 @@ def main():
             connection.commit()
 
         facilityIds = getFacilityIds(cursor)
-
+        
+        #url = config.DHIS2_HOST+config.DHIS2_DATA_VALUE_SET_REST_API_ENDPOINT   
         url = 'https://dhis.bluecodeltd.com/api/dataValueSets/'
+        #dhisCredentials = (config.DHIS2_USER, config.DHIS2_PASS)        
         dhisCredentials = ('admin', 'district')
-        start_time = round(time.time(), 4)
+        
         month = sys.argv[1]
         facilityInfo = []
         facilities = []
@@ -335,15 +349,12 @@ def main():
             facilityInfo.append((facility['facility_id'], facility['facility_dhis_ou_id'], month))
             facilities.append(facility['facility_name'])  
 
-        with ProcessPoolExecutor(max_workers = 10) as executor:
+        with ProcessPoolExecutor(max_workers = 11) as executor:
             jsonPayload = dict(zip(facilities, executor.map(generateJsonPayload, facilityInfo)))
-
-        #print('jsonPayload: ', jsonPayload)
         
-        #POST to api
+        #POST to dhis api
         for orgUnitPayload in jsonPayload.values():
             response = requests.post(url, auth = dhisCredentials, json = orgUnitPayload, headers = {"Content-Type":"application/json"})
-            print(response.json())
 
         duration = round(round(time.time(), 4) - start_time)
         print('Duration: ', duration, 's')
