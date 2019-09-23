@@ -12,160 +12,159 @@ from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 # Function definitions
 
 #Get visit ids that satisfy a given indicator
-def visitList(indicator, visitTypeId, locationId, visitMonth, connection):
+def visit_list(indicator, visit_type_id, location_id, visit_month, connection):
     cursor = connection.cursor(dictionary = True)
     strings = []
-    lesionsConceptId = 165184
-    suspectCancer = 165183
+    lesions_concept_id = 165184
+    suspect_cancer = 165183
     for key in indicator:
         if (key != 'question'):
-            if (lesionsConceptId in indicator.values()):
-                strings.append('obs_value_concept_id != {}'.format(suspectCancer))
+            if (lesions_concept_id in indicator.values()):
+                strings.append('obs_value_concept_id != {}'.format(suspect_cancer))
             else:
                 strings.append('obs_value_concept_id = {}'.format(indicator[key]))
     answers = ' OR '.join(strings)
     query = "SELECT visit_id FROM visit_data_matvw WHERE obs_concept_id = %s AND ({}) AND visit_type_id = %s AND visit_location_id = %s AND DATE_FORMAT(date_started, '%m-%Y') = %s AND visit_location_retired = 0".format(answers)
-    params = (indicator['question'], visitTypeId, locationId, visitMonth)
+    params = (indicator['question'], visit_type_id, location_id, visit_month)
     cursor.execute(query, params)
-    visitIdsList = cursor.fetchall()
+    visit_idsList = cursor.fetchall()
     cursor.close()
     result = []
-    for visit in visitIdsList:
+    for visit in visit_idsList:
         result.append(visit['visit_id'])
     return result
 
 #Get patients that satisfy all indicators
-def listIntersection(args):
+def list_intersection(args):
     return list(set(args[0]).intersection(*args))
 
 #Get patient ids from list of visit ids
-def patientList(visitIds, connection):
-    if (len(visitIds) == 1):
-        query = 'SELECT DISTINCT patient_id FROM visit_data_matvw WHERE visit_id = {}'.format(visitIds[0])
-    elif (len(visitIds) == 0):
+def patient_list(visit_ids, connection):
+    if (len(visit_ids) == 1):
+        query = 'SELECT DISTINCT patient_id FROM visit_data_matvw WHERE visit_id = {}'.format(visit_ids[0])
+    elif (len(visit_ids) == 0):
         return []
     else:
-        query = 'SELECT DISTINCT patient_id FROM visit_data_matvw WHERE visit_id IN {}'.format(tuple(visitIds))
+        query = 'SELECT DISTINCT patient_id FROM visit_data_matvw WHERE visit_id IN {}'.format(tuple(visit_ids))
     cursor = connection.cursor(dictionary = True)
     cursor.execute(query)
-    patientIds = cursor.fetchall()
+    patient_ids = cursor.fetchall()
     cursor.close()
     result = []
-    for visit in patientIds:
+    for visit in patient_ids:
         result.append(visit['patient_id'])
     return result
 
 # Filter patients by age
-def patientAges(patientIds, conn, lowerLimit, upperLimit):
-    if (len(patientIds) == 1):
-        query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id = {} AND identifier_type_id = 4 AND age BETWEEN %s AND %s'.format(patientIds[0])
-    elif (len(patientIds) == 0):
+def patient_ages(patient_ids, connection, lower_age_limit, upper_age_limit):
+    if (len(patient_ids) == 1):
+        query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id = {} AND identifier_type_id = 4 AND age BETWEEN %s AND %s'.format(patient_ids[0])
+    elif (len(patient_ids) == 0):
         return 0
     else:
-        query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id IN {} AND identifier_type_id = 4 AND age BETWEEN %s AND %s'.format(tuple(patientIds))
-    cursor = conn.cursor(dictionary = True)
-    params = (lowerLimit, upperLimit)
+        query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id IN {} AND identifier_type_id = 4 AND age BETWEEN %s AND %s'.format(tuple(patient_ids))
+    cursor = connection.cursor(dictionary = True)
+    params = (lower_age_limit, upper_age_limit)
     cursor.execute(query, params)
-    patientsInRange = cursor.fetchall()
+    patients_in_range = cursor.fetchall()
     cursor.close()
     result = []
-    for visit in patientsInRange:
+    for visit in patients_in_range:
         result.append(visit['patient_id'])
     return result[0]
 
 # Aggregated function call
-def patientCount(questionAnswer, visitTypeId, locationId, visitMonth, connection, lowerAgeLimit = -1, upperAgeLimit = -1):
-    listOfVisits = []
-    #cursor = conn.cursor(dictionary = True)
-    for questAns in questionAnswer:
-        listOfVisits.append(visitList(questAns, visitTypeId, locationId, visitMonth, connection))
-    indicators = listIntersection(listOfVisits)
-    patients = patientList(indicators, connection)
-    if (lowerAgeLimit == -1 or upperAgeLimit == -1):
+def patient_count(indicator_concept_ids, visit_type_id, location_id, visit_month, connection, lower_age_limit = -1, upper_age_limit = -1):
+    list_of_visits = []
+    for indicator_concept_id in indicator_concept_ids:
+        list_of_visits.append(visit_list(indicator_concept_id, visit_type_id, location_id, visit_month, connection))
+    indicators = list_intersection(list_of_visits)
+    patients = patient_list(indicators, connection)
+    if (lower_age_limit == -1 or upper_age_limit == -1):
         return len(patients)
     else: 
-        result = patientAges(patients, connection, lowerAgeLimit, upperAgeLimit)
+        result = patient_ages(patients, connection, lower_age_limit, upper_age_limit)
         #cursor.close()
         return result
 
 #Get patient counts for a particular visit type
-def visitTypeFunc(listOfIndicators, visitTypeId, visitLocationId, visitMonth, connection):
-    concepts1 = listOfIndicators.copy()
-    concepts1.extend([{'question':165203, 'answer':165132}])
-    hivUnknown = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection)
+def visit_type_func(indicator_concept_ids, visit_type_id, visit_location_id, visit_month, connection):
+    concepts = indicator_concept_ids.copy()
+    concepts.extend([{'question':165203, 'answer':165132}])
+    hiv_unknown = patient_count(concepts, visit_type_id, visit_location_id, visit_month, connection)
 
-    concepts1 = listOfIndicators.copy()
-    concepts1.extend([{'question':165203, 'answer':165131}])
-    hivNegative = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection)
+    concepts = indicator_concept_ids.copy()
+    concepts.extend([{'question':165203, 'answer':165131}])
+    hiv_negative = patient_count(concepts, visit_type_id, visit_location_id, visit_month, connection)
 
-    concepts1 = listOfIndicators.copy()
-    concepts1.extend([{'question':165203, 'answer':165125}])
-    hivPositive = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection)       
+    concepts = indicator_concept_ids.copy()
+    concepts.extend([{'question':165203, 'answer':165125}])
+    hiv_positive = patient_count(concepts, visit_type_id, visit_location_id, visit_month, connection)       
 
-    concepts1 = listOfIndicators.copy()
-    concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165127}])
-    notOnArt = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection)
+    concepts = indicator_concept_ids.copy()
+    concepts.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165127}])
+    not_on_art = patient_count(concepts, visit_type_id, visit_location_id, visit_month, connection)
 
-    concepts1 = listOfIndicators.copy()
-    concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onARTUnder24 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 0, 24)
+    concepts = indicator_concept_ids.copy()
+    concepts.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
+    on_art_under_24 = patient_count(concepts, visit_type_id, visit_location_id, visit_month, connection, 0, 24)
 
-    concepts1 = listOfIndicators.copy()
-    concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onART_25_29 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 25, 29)
+    concepts = indicator_concept_ids.copy()
+    concepts.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
+    on_art_25_29 = patient_count(concepts, visit_type_id, visit_location_id, visit_month, connection, 25, 29)
 
-    concepts1 = listOfIndicators.copy()
-    concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onART_30_34 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 30, 34)
+    concepts = indicator_concept_ids.copy()
+    concepts.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
+    on_art_30_34 = patient_count(concepts, visit_type_id, visit_location_id, visit_month, connection, 30, 34)
 
-    concepts1 = listOfIndicators.copy()
-    concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onART_35_39 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 35, 39)
+    concepts = indicator_concept_ids.copy()
+    concepts.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
+    on_art_35_39 = patient_count(concepts, visit_type_id, visit_location_id, visit_month, connection, 35, 39)
 
-    concepts1 = listOfIndicators.copy()
-    concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onART_40_49 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 40, 49)
+    concepts = indicator_concept_ids.copy()
+    concepts.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
+    on_art_40_49 = patient_count(concepts, visit_type_id, visit_location_id, visit_month, connection, 40, 49)
 
-    concepts1 = listOfIndicators.copy()
-    concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onART_50_59 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 50, 59)
+    concepts = indicator_concept_ids.copy()
+    concepts.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
+    on_art_50_59 = patient_count(concepts, visit_type_id, visit_location_id, visit_month, connection, 50, 59)
 
-    concepts1 = listOfIndicators.copy()
-    concepts1.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
-    onARTOver60 = patientCount(concepts1, visitTypeId, visitLocationId, visitMonth, connection, 60, 110)
+    concepts = indicator_concept_ids.copy()
+    concepts.extend([{'question':165203, 'answer':165125}, {'question':165223, 'answer':165126}])
+    on_art_over_60 = patient_count(concepts, visit_type_id, visit_location_id, visit_month, connection, 60, 110)
 
-    totalOnART = onARTUnder24 + onART_25_29 + onART_30_34 + onART_35_39 + onART_40_49 + onART_50_59 + onARTOver60
+    total_on_art = on_art_under_24 + on_art_25_29 + on_art_30_34 + on_art_35_39 + on_art_40_49 + on_art_50_59 + on_art_over_60
 
-    total = hivUnknown + hivNegative + notOnArt + totalOnART
+    total = hiv_unknown + hiv_negative + not_on_art + total_on_art
 
-    countList = [hivUnknown, hivNegative, hivPositive, notOnArt, onARTUnder24, onART_25_29, onART_30_34, onART_35_39, onART_40_49, onART_50_59, onARTOver60, totalOnART, total]
+    patient_counts = [hiv_unknown, hiv_negative, hiv_positive, not_on_art, on_art_under_24, on_art_25_29, on_art_30_34, on_art_35_39, on_art_40_49, on_art_50_59, on_art_over_60, total_on_art, total]
     
-    return countList
+    return patient_counts
 
 # Get patient counts for each of the three visit types
-def indicatorRows(args):
+def indicator_rows(args):
     indicators = args[0]
-    visitTypeIds = args[1]
-    visitLocationId = args[2]
-    visitMonth = args[3]
+    visit_type_ids = args[1]
+    visit_location_id = args[2]
+    visit_month = args[3]
     connection = args[4]
 
     # Initial Visit - visit_type_id = 2
-    initialVisit = visitTypeFunc(indicators, visitTypeIds[0], visitLocationId, visitMonth, connection)
+    initial_visit = visit_type_func(indicators, visit_type_ids[0], visit_location_id, visit_month, connection)
 
     # One Year Follow-up - visit_type_id = 5
-    oneYearFollowUp = visitTypeFunc(indicators, visitTypeIds[1], visitLocationId, visitMonth, connection)
+    one_year_followup = visit_type_func(indicators, visit_type_ids[1], visit_location_id, visit_month, connection)
 
     # Routine Visit - visit_type_id = 6
-    routineVisit = visitTypeFunc(indicators, visitTypeIds[2], visitLocationId, visitMonth, connection)
+    routine_visit = visit_type_func(indicators, visit_type_ids[2], visit_location_id, visit_month, connection)
 
     # return result as a dictionary
-    result = {'initialVisit': initialVisit, 'oneYearFollowUp': oneYearFollowUp, 'routineVisit': routineVisit}
+    result = {'initial_visit': initial_visit, 'one_year_followup': one_year_followup, 'routine_visit': routine_visit}
 
     return result
 
 # Get counts for each of the indicators
-def indicatorList(location, month, connection_pool):
+def indicator_list(location, month, connection_pool):
     result = {}
     connections = []
     for _ in range(0,8):
@@ -182,38 +181,30 @@ def indicatorList(location, month, connection_pool):
     ]
 
     with ThreadPoolExecutor(max_workers = 10) as executor:            
-        indicatorNames = ('suspectCancer', 'viaScreening', 'positiveVIA', 'cryoThermal', 'prevDelayedCryoThermal', 'cryoThermalDelayed', 'ptComplication', 'lesions')
-        result = dict(zip(indicatorNames, executor.map(indicatorRows, indicators)))
+        indicator_names = ('suspect_cancer', 'via_screening', 'positive_via', 'cryo_thermal', 'prev_delayed_cryo_thermal', 'delayed_cryo_thermal', 'post_treatment_complication', 'lesions')
+        result = dict(zip(indicator_names, executor.map(indicator_rows, indicators)))
     
     for connection in connections:
         connection.close()
 
-    suspectCancer = result['suspectCancer']
-    viaScreening = result['viaScreening']
-    suspectCancerViaScreening = aggregate(suspectCancer, viaScreening)
-    result['suspectCancerViaScreening'] = suspectCancerViaScreening
+    suspect_cancer = result['suspect_cancer']
+    via_screening = result['via_screening']
+    suspect_cancer_via_screening = aggregate_indicators(suspect_cancer, via_screening)
+    result['suspect_cancer_via_screening'] = suspect_cancer_via_screening
     
-    del result['prevDelayedCryoThermal']['oneYearFollowUp']
-    del result['prevDelayedCryoThermal']['routineVisit']
+    del result['prev_delayed_cryo_thermal']['one_year_followup']
+    del result['prev_delayed_cryo_thermal']['routine_visit']
     
     #Total number of clients treated with cryotherapy/thermal coagulation (5+6)
-    listOfRows = [result['cryoThermal']['initialVisit'], result['cryoThermal']['oneYearFollowUp'], result['cryoThermal']['routineVisit'], result['prevDelayedCryoThermal']['initialVisit']]
-    totalCryoThermal = {}
-    totalCryoThermal['initialVisit'] = sumRows(listOfRows)
-    result['totalCryoThermal'] = totalCryoThermal
+    list_of_rows = [result['cryo_thermal']['initial_visit'], result['cryo_thermal']['one_year_followup'], result['cryo_thermal']['routine_visit'], result['prev_delayed_cryo_thermal']['initial_visit']]
+    total_cryo_thermal = {}
+    total_cryo_thermal['initial_visit'] = sum_of_rows(list_of_rows)
+    result['total_cryo_thermal'] = total_cryo_thermal
         
-    valuesList = []
-    for item in result:
-        if (isinstance(item, dict)):
-            for key in item.keys():
-                valuesList.append(item[key])
-        else:
-            valuesList.append(item)
-
     return result
 
 # Aggregate two dictionaries
-def aggregate(dict1, dict2):
+def aggregate_indicators(dict1, dict2):
     result = {}
     for key in dict1:
         lists = [dict1[key], dict2[key]]
@@ -222,69 +213,76 @@ def aggregate(dict1, dict2):
     return result
 
 # Sum up the corresponding values in several lists
-def sumRows(lists):
+def sum_of_rows(lists):
     result = [sum(x) for x in zip(*lists)]
     return result
 
 # Create list of dictionary values
-def getDataElements(location, month, connection_pool):
-    dataElements = []
-    categoryOptionCombos = {
-        'initialVisit': ['ZxsS9HGdhV1', 'AHS2fnqf971', 'VMMUi2HZOpS', 'PqG5oFcHpLf', 'I5LyQqIyqX9', 'eb9lrs8dq64', 'NmBwhTMgYDK', 'CNKn8YRApww', 'kImwcR75U8J', 'wJlF4hrj7IA', 'ZDexPKuoua5', 'nc4NgEe5n91', 'mpAMSeHtHhc'],
-        'oneYearFollowUp': ['q7v6tWrRqF9', 'haZd47S1HFE', 'N1dUQRNIVLr', 'qhI88d1Z0F9', 'ntHyHb6e0wx', 'M9CKfD4v6lw', 'lD5EVDDcNqQ', 'ICJkUDl3DdT', 'Uxb6dihTO4D', 'ApDZ1vSzys3', 'HCWBLRB75Q7', 'vMJjcIX61tu', 'kyymytyxhpr'],
-        'routineVisit': ['s6jpj7PK07u', 'fnBBGZhN67e', 'cnpi9Pp8CBl', 'Nq3oHg0fGVl', 'AGtLpLlS4h5', 'Czh8BvXx7w8', 'IPAqVQzuV3q', 'hOpp3nH7TCm', 'N8VF37JEOQz', 'ScCwG7tlcOM', 'mhq0Hm025Kn', 'fF4dYOFqQCs', 'BOd06N4seRE']
+def get_data_elements(location, month, connection_pool):
+    data_elements = []
+    category_option_combos = {
+        'initial_visit': ['ZxsS9HGdhV1', 'AHS2fnqf971', 'VMMUi2HZOpS', 'PqG5oFcHpLf', 'I5LyQqIyqX9', 'eb9lrs8dq64', 'NmBwhTMgYDK', 'CNKn8YRApww', 'kImwcR75U8J', 'wJlF4hrj7IA', 'ZDexPKuoua5', 'nc4NgEe5n91', 'mpAMSeHtHhc'],
+        'one_year_followup': ['q7v6tWrRqF9', 'haZd47S1HFE', 'N1dUQRNIVLr', 'qhI88d1Z0F9', 'ntHyHb6e0wx', 'M9CKfD4v6lw', 'lD5EVDDcNqQ', 'ICJkUDl3DdT', 'Uxb6dihTO4D', 'ApDZ1vSzys3', 'HCWBLRB75Q7', 'vMJjcIX61tu', 'kyymytyxhpr'],
+        'routine_visit': ['s6jpj7PK07u', 'fnBBGZhN67e', 'cnpi9Pp8CBl', 'Nq3oHg0fGVl', 'AGtLpLlS4h5', 'Czh8BvXx7w8', 'IPAqVQzuV3q', 'hOpp3nH7TCm', 'N8VF37JEOQz', 'ScCwG7tlcOM', 'mhq0Hm025Kn', 'fF4dYOFqQCs', 'BOd06N4seRE']
     }
-    dataElementIds = {
-        'suspectCancer': 'NGNkmwHNCwE',
-        'viaScreening': 'BGsWghec94N',
-        'suspectCancerViaScreening': 'q1lRGMdyYGD',
-        'positiveVIA': 'DOkKxneLJ9q',
-        'cryoThermal': 'sU5nvr2O0p6',
-        'prevDelayedCryoThermal': 'njmiQgcpM71',
-        'totalCryoThermal': 'ujgl9EvEZip',
-        'cryoThermalDelayed': 'rFwBlzJqYM4',
-        'ptComplication': 'yrGIgSDtA3s',
+    data_element_ids = {
+        'suspect_cancer': 'NGNkmwHNCwE',
+        'via_screening': 'BGsWghec94N',
+        'suspect_cancer_via_screening': 'q1lRGMdyYGD',
+        'positive_via': 'DOkKxneLJ9q',
+        'cryo_thermal': 'sU5nvr2O0p6',
+        'prev_delayed_cryo_thermal': 'njmiQgcpM71',
+        'total_cryo_thermal': 'ujgl9EvEZip',
+        'delayed_cryo_thermal': 'rFwBlzJqYM4',
+        'post_treatment_complication': 'yrGIgSDtA3s',
         'lesions': 'VXXbhsUFBEY'
     }
     
-    listOfValues = indicatorList(location, month, connection_pool)
+    indicator_values = indicator_list(location, month, connection_pool)
 
-    for indicator in listOfValues:
-        dataElement = dataElementIds[indicator]
-        for visitName in listOfValues[indicator]:
-            valueList = listOfValues[indicator][visitName]
-            for i in range(0, len(valueList)):
-                categoryOptionCombo = categoryOptionCombos[visitName][i]
-                dataElements.append({
-                    "dataElement": dataElement,
-                    "categoryOptionCombo": categoryOptionCombo,
-                    "value": valueList[i]
+    for indicator in indicator_values:
+        data_element = data_element_ids[indicator]
+        for visit_type in indicator_values[indicator]:
+            value_list = indicator_values[indicator][visit_type]
+            for i in range(0, len(value_list)):
+                category_option_combo = category_option_combos[visit_type][i]
+                data_elements.append({
+                    "data_element": data_element,
+                    "category_option_combo": category_option_combo,
+                    "value": value_list[i]
                 })
-    return dataElements
+    return data_elements
 
 # Get facility information
-def getFacilityIds(cursor):
+def get_facility_ids(cursor):
     query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0'
     cursor.execute(query)
-    facilityIds = cursor.fetchall()
-    return facilityIds
+    facility_ids = cursor.fetchall()
+    return facility_ids
 
-#Get a formatted complte date for the report
-def getCompleteDate(month):
+#Get formatted complete date and period for the report
+def get_formatted_dates(month):
+    #Format the complete date
     dateList = month.split('-')
-    reportMonth = int(dateList[0])
-    reportYear = int(dateList[1])
-    if reportMonth == 12:
-        completeMonth = 1
-        completeYear = reportYear + 1
+    report_month = int(dateList[0])
+    report_year = int(dateList[1])
+    if report_month == 12:
+        complete_month = 1
+        complete_year = report_year + 1
     else:
-        completeMonth = reportMonth + 1
-        completeYear = reportYear
-    date = datetime.datetime(completeYear, completeMonth, 1)
-    return '{}-{}-{}'.format(date.strftime('%Y'), date.strftime('%m'), date.strftime('%d'))
+        complete_month = report_month + 1
+        complete_year = report_year
+    date = datetime.datetime(complete_year, complete_month, 1)
+    complete_date = '{}-{}-{}'.format(date.strftime('%Y'), date.strftime('%m'), date.strftime('%d'))
+    #Format the period
+    formatted_month = month.split('-')
+    formatted_period = '{}-{}'.format(formatted_month[1], formatted_month[0])
+    period = formatted_period[:7].replace("-","")
+    result = {'period': period, 'complete_date': complete_date}
+    return result
 
 # Generate json payload for POST request
-def generateJsonPayload(args):
+def generate_json_payload(args):
     '''connection_pool = mysql.connector.pooling.MySQLConnectionPool(
             pool_name = 'connection_pool',
             pool_size = 10,
@@ -304,23 +302,21 @@ def generateJsonPayload(args):
     )
 
     location = args[0]
-    orgUnitId = args[1]
+    org_unit_id = args[1]
     month = args[2]
-    dataSetId = 'oIZPVojzsdH'
+    data_set_id = 'oIZPVojzsdH'
     # Get list of dictionary values
-    dataElements = getDataElements(location, month, connection_pool)
-    #Calculate the complete date of the report
-    completeDate = getCompleteDate(month)
-    #Format the period for the report
-    formattedMonth = month.split('-')
-    formattedPeriod = '{}-{}'.format(formattedMonth[1], formattedMonth[0])
-    period = formattedPeriod[:7].replace("-","")
+    data_elements = get_data_elements(location, month, connection_pool)
+    #Get the complete date and period of the report
+    dates = get_formatted_dates(month)
+    period = dates['period']
+    complete_date = dates['complete_date']
     return {
-        "dataSet": dataSetId,
-        "completeDate": completeDate,
+        "data_set": data_set_id,
+        "complete_date": complete_date,
         "period": period,
-        "orgUnit": orgUnitId,
-        "dataValues": dataElements
+        "org_unit": org_unit_id,
+        "data_values": data_elements
     }
 
 # Main thread
@@ -335,26 +331,25 @@ def main():
             cursor.execute('CALL RefreshMaterializedViews()')
             connection.commit()
 
-        facilityIds = getFacilityIds(cursor)
+        facility_ids = get_facility_ids(cursor)
         
         #url = config.DHIS2_HOST+config.DHIS2_DATA_VALUE_SET_REST_API_ENDPOINT   
         url = 'https://dhis.bluecodeltd.com/api/dataValueSets/'
-        #dhisCredentials = (config.DHIS2_USER, config.DHIS2_PASS)        
-        dhisCredentials = ('admin', 'district')
-        
+        #dhis_credentials = (config.DHIS2_USER, config.DHIS2_PASS)        
+        dhis_credentials = ('admin', 'district')
         month = sys.argv[1]
-        facilityInfo = []
+        facility_info = []
         facilities = []
-        for facility in facilityIds:
-            facilityInfo.append((facility['facility_id'], facility['facility_dhis_ou_id'], month))
+        for facility in facility_ids:
+            facility_info.append((facility['facility_id'], facility['facility_dhis_ou_id'], month))
             facilities.append(facility['facility_name'])  
 
         with ProcessPoolExecutor(max_workers = 11) as executor:
-            jsonPayload = dict(zip(facilities, executor.map(generateJsonPayload, facilityInfo)))
+            json_payload = dict(zip(facilities, executor.map(generate_json_payload, facility_info)))
         
         #POST to dhis api
-        for orgUnitPayload in jsonPayload.values():
-            response = requests.post(url, auth = dhisCredentials, json = orgUnitPayload, headers = {"Content-Type":"application/json"})
+        for org_unit_payload in json_payload.values():
+            response = requests.post(url, auth = dhis_credentials, json = org_unit_payload, headers = {"Content-Type":"application/json"})
 
         duration = round(round(time.time(), 4) - start_time)
         print('Duration: ', duration, 's')
