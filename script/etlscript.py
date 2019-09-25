@@ -15,18 +15,21 @@ from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 def visit_list(indicator, visit_type_id, location_id, visit_month, connection):
     cursor = connection.cursor(dictionary = True)
     strings = []
+    parameters = [indicator['question']]
     lesions_concept_id = 165184
     suspect_cancer = 165183
     for key in indicator:
         if (key != 'question'):
             if (lesions_concept_id in indicator.values()):
-                strings.append('obs_value_concept_id != {}'.format(suspect_cancer))
+                strings.append('obs_value_concept_id != %s')
+                parameters.append(suspect_cancer)
             else:
-                strings.append('obs_value_concept_id = {}'.format(indicator[key]))
+                strings.append('obs_value_concept_id = %s')
+                parameters.append(indicator[key])
     answers = ' OR '.join(strings)
     query = "SELECT visit_id FROM visit_data_matvw WHERE obs_concept_id = %s AND ({}) AND visit_type_id = %s AND visit_location_id = %s AND DATE_FORMAT(date_started, '%m-%Y') = %s AND visit_location_retired = 0".format(answers)
-    params = (indicator['question'], visit_type_id, location_id, visit_month)
-    cursor.execute(query, params)
+    parameters.extend([visit_type_id, location_id, visit_month])
+    cursor.execute(query, parameters)
     visit_idsList = cursor.fetchall()
     cursor.close()
     result = []
@@ -40,14 +43,17 @@ def list_intersection(args):
 
 #Get patient ids from list of visit ids
 def patient_list(visit_ids, connection):
-    if (len(visit_ids) == 1):
-        query = 'SELECT DISTINCT patient_id FROM visit_data_matvw WHERE visit_id = {}'.format(visit_ids[0])
-    elif (len(visit_ids) == 0):
+    parameters = []
+    visit_ids_placeholders = '%s'
+    if (len(visit_ids) == 0):
         return []
     else:
-        query = 'SELECT DISTINCT patient_id FROM visit_data_matvw WHERE visit_id IN {}'.format(tuple(visit_ids))
+        for _ in range(1, len(visit_ids)):
+            visit_ids_placeholders = '{}, {}'.format(visit_ids_placeholders, '%s')
+        query = 'SELECT DISTINCT patient_id FROM visit_data_matvw WHERE visit_id IN ({})'.format(visit_ids_placeholders)
+        parameters.extend(visit_ids)
     cursor = connection.cursor(dictionary = True)
-    cursor.execute(query)
+    cursor.execute(query, parameters)
     patient_ids = cursor.fetchall()
     cursor.close()
     result = []
@@ -255,7 +261,7 @@ def get_data_elements(location, month, connection_pool):
 
 # Get facility information
 def get_facility_ids(cursor):
-    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0'
+    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0 LIMIT 2523, 10'
     cursor.execute(query)
     facility_ids = cursor.fetchall()
     return facility_ids
@@ -330,14 +336,13 @@ def main():
             cursor = connection.cursor(dictionary = True)
             cursor.execute('CALL RefreshMaterializedViews()')
             connection.commit()
-
-        facility_ids = get_facility_ids(cursor)
         
         #url = config.DHIS2_HOST+config.DHIS2_DATA_VALUE_SET_REST_API_ENDPOINT   
         url = 'https://dhis.bluecodeltd.com/api/dataValueSets/'
         #dhis_credentials = (config.DHIS2_USER, config.DHIS2_PASS)        
         dhis_credentials = ('admin', 'district')
         month = sys.argv[1]
+        facility_ids = get_facility_ids(cursor)
         facility_info = []
         facilities = []
         for facility in facility_ids:
@@ -350,7 +355,7 @@ def main():
         #POST to dhis api
         for org_unit_payload in json_payload.values():
             response = requests.post(url, auth = dhis_credentials, json = org_unit_payload, headers = {"Content-Type":"application/json"})
-
+        
         duration = round(round(time.time(), 4) - start_time)
         print('Duration: ', duration, 's')
   
