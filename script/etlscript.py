@@ -62,7 +62,7 @@ def patient_list(visit_ids, connection):
     return result
 
 # Filter patients by age
-def patient_ages(patient_ids, connection, lower_age_limit, upper_age_limit):
+def patients_in_age_range(patient_ids, connection, lower_age_limit, upper_age_limit):
     if (len(patient_ids) == 1):
         query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id = {} AND identifier_type_id = 4 AND age BETWEEN %s AND %s'.format(patient_ids[0])
     elif (len(patient_ids) == 0):
@@ -89,7 +89,7 @@ def patient_count(indicator_concept_ids, visit_type_id, location_id, visit_month
     if (lower_age_limit == -1 or upper_age_limit == -1):
         return len(patients)
     else: 
-        result = patient_ages(patients, connection, lower_age_limit, upper_age_limit)
+        result = patients_in_age_range(patients, connection, lower_age_limit, upper_age_limit)
         #cursor.close()
         return result
 
@@ -310,8 +310,8 @@ def generate_json_payload(args):
     location = args[0]
     org_unit_id = args[1]
     month = args[2]
+    #data_set_id = config.DHIS2_DATASET
     data_set_id = 'oIZPVojzsdH'
-    # Get list of dictionary values
     data_elements = get_data_elements(location, month, connection_pool)
     #Get the complete date and period of the report
     dates = get_formatted_dates(month)
