@@ -1,4 +1,4 @@
-import config
+#import config
 import mysql.connector
 from mysql.connector import Error
 from mysql.connector import pooling
@@ -63,15 +63,18 @@ def patient_list(visit_ids, connection):
 
 # Filter patients by age
 def patients_in_age_range(patient_ids, connection, lower_age_limit, upper_age_limit):
-    if (len(patient_ids) == 1):
-        query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id = {} AND identifier_type_id = 4 AND age BETWEEN %s AND %s'.format(patient_ids[0])
-    elif (len(patient_ids) == 0):
+    parameters = []
+    patient_ids_placeholders = '%s'
+    if (len(patient_ids) == 0):
         return 0
     else:
-        query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id IN {} AND identifier_type_id = 4 AND age BETWEEN %s AND %s'.format(tuple(patient_ids))
+        for _ in range(1, len(patient_ids)):
+            patient_ids_placeholders = '{}, {}'.format(patient_ids_placeholders, '%s')
+        query = 'SELECT COUNT(DISTINCT patient_id) AS patient_id FROM patient_data_matvw WHERE patient_id IN ({}) AND identifier_type_id = 4 AND age BETWEEN %s AND %s'.format(patient_ids_placeholders)
+        parameters.extend(patient_ids)
     cursor = connection.cursor(dictionary = True)
-    params = (lower_age_limit, upper_age_limit)
-    cursor.execute(query, params)
+    parameters.extend([lower_age_limit, upper_age_limit])
+    cursor.execute(query, parameters)
     patients_in_range = cursor.fetchall()
     cursor.close()
     result = []
