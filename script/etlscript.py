@@ -1,4 +1,4 @@
-#import config
+import smartcerv_config
 import mysql.connector
 from mysql.connector import Error
 from mysql.connector import pooling
@@ -93,7 +93,6 @@ def patient_count(indicator_concept_ids, visit_type_id, location_id, visit_month
         return len(patients)
     else: 
         result = patients_in_age_range(patients, connection, lower_age_limit, upper_age_limit)
-        #cursor.close()
         return result
 
 #Get patient counts for a particular visit type
@@ -248,6 +247,7 @@ def get_data_elements(location, month, connection_pool):
     }
     
     indicator_values = indicator_list(location, month, connection_pool)
+    print(indicator_values)
 
     for indicator in indicator_values:
         data_element = data_element_ids[indicator]
@@ -256,15 +256,15 @@ def get_data_elements(location, month, connection_pool):
             for i in range(0, len(value_list)):
                 category_option_combo = category_option_combos[visit_type][i]
                 data_elements.append({
-                    "data_element": data_element,
-                    "category_option_combo": category_option_combo,
+                    "dataElement": data_element,
+                    "categoryOptionCombo": category_option_combo,
                     "value": value_list[i]
                 })
     return data_elements
 
 # Get facility information
 def get_facility_ids(cursor):
-    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0 LIMIT 2523, 10'
+    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0 AND facility_id = 5314'
     cursor.execute(query)
     facility_ids = cursor.fetchall()
     return facility_ids
@@ -292,60 +292,54 @@ def get_formatted_dates(month):
 
 # Generate json payload for POST request
 def generate_json_payload(args):
-    '''connection_pool = mysql.connector.pooling.MySQLConnectionPool(
-            pool_name = 'connection_pool',
-            pool_size = 10,
-            host = config.OPENMRS_HOST, 
-            database = config.OPENMRS_DB, 
-            user = config.OPENMRS_USER, 
-            password = config.OPENMRS_PASS
-    )'''
-
     connection_pool = mysql.connector.pooling.MySQLConnectionPool(
             pool_name = 'connection_pool',
             pool_size = 10,
-            host = '34.240.241.171',
-            database = 'openmrs',
-            user = 'smartcerv',
-            password = 'smartcerv'
+            host = smartcerv_config.OPENMRS_HOST, 
+            database = smartcerv_config.OPENMRS_DB, 
+            user = smartcerv_config.OPENMRS_USER, 
+            password = smartcerv_config.OPENMRS_PASS
     )
 
     location = args[0]
     org_unit_id = args[1]
     month = args[2]
-    #data_set_id = config.DHIS2_DATASET
-    data_set_id = 'oIZPVojzsdH'
+    data_set_id = smartcerv_config.DHIS2_DATASET
+    #data_set_id = 'oIZPVojzsdH'
     data_elements = get_data_elements(location, month, connection_pool)
     #Get the complete date and period of the report
     dates = get_formatted_dates(month)
     period = dates['period']
     complete_date = dates['complete_date']
     return {
-        "data_set": data_set_id,
-        "complete_date": complete_date,
+        "dataSet": data_set_id,
+        "completeDate": complete_date,
         "period": period,
-        "org_unit": org_unit_id,
-        "data_values": data_elements
+        "orgUnit": org_unit_id,
+        "dataValues": data_elements
     }
 
 # Main thread
 def main():
     try:
+        print('Script started')
         start_time = round(time.time(), 4)
         # Refresh the materialized views
-        #connection = mysql.connector.connect(host = config.OPENMRS_HOST, database = config.OPENMRS_DB, user = config.OPENMRS_USER, password = config.OPENMRS_PASS)
-        connection = mysql.connector.connect(host = '34.240.241.171', database = 'openmrs', user = 'smartcerv', password = 'smartcerv')
+        connection = mysql.connector.connect(host = smartcerv_config.OPENMRS_HOST, database = smartcerv_config.OPENMRS_DB, user = smartcerv_config.OPENMRS_USER, password = smartcerv_config.OPENMRS_PASS)
+        #connection = mysql.connector.connect(host = '34.240.241.171', database = 'openmrs', user = 'smartcerv', password = 'smartcerv')
         if connection.is_connected():
             cursor = connection.cursor(dictionary = True)
             cursor.execute('CALL RefreshMaterializedViews()')
             connection.commit()
         
-        #url = config.DHIS2_HOST+config.DHIS2_DATA_VALUE_SET_REST_API_ENDPOINT   
-        url = 'https://dhis.bluecodeltd.com/api/dataValueSets/'
-        #dhis_credentials = (config.DHIS2_USER, config.DHIS2_PASS)        
-        dhis_credentials = ('admin', 'district')
+        url = smartcerv_config.DHIS2_HOST+smartcerv_config.DHIS2_DATA_VALUE_SET_REST_API_ENDPOINT   
+        #url = 'https://dhis.bluecodeltd.com/api/dataValueSets/'
+        print(url)
+        dhis_credentials = (smartcerv_config.DHIS2_USER, smartcerv_config.DHIS2_PASS)        
+        #dhis_credentials = ('admin', 'district')
         month = sys.argv[1]
         facility_ids = get_facility_ids(cursor)
+        print(facility_ids)
         facility_info = []
         facilities = []
         for facility in facility_ids:
@@ -357,10 +351,12 @@ def main():
         
         #POST to dhis api
         for org_unit_payload in json_payload.values():
+            print(org_unit_payload)
             response = requests.post(url, auth = dhis_credentials, json = org_unit_payload, headers = {"Content-Type":"application/json"})
+            print(response.json())
         
         duration = round(round(time.time(), 4) - start_time)
-        print('Duration: ', duration, 's')
+        print('Script completed in: ', duration, 's')
   
     except Error as e:
         print('An error occurred: ', e)

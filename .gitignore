@@ -2,4 +2,5 @@
 env/
 __pycache__/
 start.prod.sh
+smartcerv_report_etl.prod.sh
 logs
