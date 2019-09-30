@@ -264,7 +264,7 @@ def get_data_elements(location, month, connection_pool):
 
 # Get facility information
 def get_facility_ids(cursor):
-    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0 AND facility_id = 5314'
+    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0'
     cursor.execute(query)
     facility_ids = cursor.fetchall()
     return facility_ids
