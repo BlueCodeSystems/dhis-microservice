@@ -1,3 +1,11 @@
+-- INIT
+DROP TABLE IF EXISTS patient_data_matvw;
+DROP TABLE IF EXISTS visit_data_matvw;
+DROP TABLE IF EXISTS age_range;
+DROP TABLE IF EXISTS location_data_matvw;
+DROP TRIGGER IF EXISTS age_range;
+DROP PROCEDURE IF EXISTS RefreshMaterializedViews;
+
 -- CREATE VISIT DATA VIEW
 CREATE OR REPLACE VIEW visit_data_vw AS SELECT patient_id, encounter_type_location.visit_id, visit_type_id, visit_type_name, date_started, date_stopped, visit_location_id, visit_location_name, visit_location_retired, visit_voided, obs_location.encounter_id, encounter_type_id, encounter_type_name, encounter_location_id, encounter_location_name, encounter_datetime, encounter_provider_id, obs_location.obs_id, obs_concept_id, obs_concept_name_en, obs_datetime, obs_location_id, obs_location_name, obs_value, obs_value_concept_id FROM
 (SELECT obs_id, name as obs_value from obs JOIN concept_name ON value_coded = concept_name.concept_id  WHERE value_coded is NOT NULL AND locale = 'en' AND concept_name.voided = 0 AND locale_preferred = 1
@@ -45,48 +53,162 @@ CREATE TABLE IF NOT EXISTS visit_data_matvw (
     obs_location_id INT(11),
     obs_location_name VARCHAR(255),
     obs_value VARCHAR(255),
-    obs_value_concept_id INT(11)
+    obs_value_concept_id INT(11),
+    facility_name VARCHAR(255),
+    facility_id INT(11),
+    facility_dhis_ou_id VARCHAR(255),
+    facility_retired TINYINT(1),
+    district_name VARCHAR(255),
+    district_id INT(11),
+    district_retired TINYINT(1),
+    province_name VARCHAR(255),
+    province_id INT(11),
+    province_retired TINYINT(1)
 ) ENGINE=INNODB;
+
 
 -- CREATE INDEXES FOR VISIT DATA MATERIALIZED VIEW
 CREATE UNIQUE INDEX obs_id_idx ON visit_data_matvw(obs_id);
+CREATE INDEX patient_id_idx ON visit_data_matvw(patient_id);
 CREATE INDEX visit_type_id_idx ON visit_data_matvw(visit_type_id);
 CREATE INDEX obs_value_concept_id_idx ON visit_data_matvw(obs_value_concept_id);
 CREATE INDEX visit_location_retired_idx ON visit_data_matvw(visit_location_retired);
+CREATE INDEX date_started_idx ON visit_data_matvw(date_started);
+CREATE INDEX facility_name_idx ON visit_data_matvw(facility_name);
+CREATE INDEX district_name_idx ON visit_data_matvw(district_name);
+CREATE INDEX province_name_idx ON visit_data_matvw(province_name);
 
 -- CREATE PATIENT DATA VIEW
-CREATE OR REPLACE VIEW patient_data_vw AS SELECT patient_info.patient_id,patient_identifier_info.identifier,identifier_type_id,identifier_type_name,identifier_location_id,identifier_location_name,identifier_location_retired,given_name,family_name, name_preferred, birthdate,gender,patient_voided,dead
+CREATE OR REPLACE VIEW patient_data_vw AS SELECT patient_info.patient_id,patient_identifier_info.identifier,identifier_type_id,identifier_type_name,identifier_location_id,identifier_location_name,identifier_date_created,identifier_location_retired, birthdate,TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age ,gender,patient_voided,dead
 FROM
-(SELECT patient_id,patient.voided AS patient_voided,person.gender,person.birthdate,person.dead,person_name.given_name,person_name.family_name, person_name.preferred AS name_preferred
-FROM patient join person ON patient.patient_id=person.person_id JOIN person_name ON person.person_id=person_name.person_id
-WHERE patient.voided=0 AND person_name.voided=0) AS patient_info
+(SELECT patient_id,patient.voided AS patient_voided,person.gender,person.birthdate,person.dead
+FROM patient join person ON patient.patient_id=person.person_id
+WHERE patient.voided=0) AS patient_info
 JOIN
-(SELECT patient_identifier.patient_id,patient_identifier.identifier,patient_identifier.identifier_type AS identifier_type_id,patient_identifier.location_id AS identifier_location_id,location.name AS identifier_location_name,location.retired AS identifier_location_retired,patient_identifier_type.name AS identifier_type_name
+(SELECT patient_identifier.patient_id,patient_identifier.identifier,patient_identifier.identifier_type AS identifier_type_id,patient_identifier.location_id AS identifier_location_id,location.name AS identifier_location_name,location.retired AS identifier_location_retired,patient_identifier_type.name AS identifier_type_name, patient_identifier.date_created AS identifier_date_created
 FROM patient_identifier
 JOIN patient_identifier_type ON patient_identifier.identifier_type=patient_identifier_type.patient_identifier_type_id 
 JOIN location ON patient_identifier.location_id=location.location_id 
 WHERE patient_identifier.voided=0) AS patient_identifier_info ON patient_info.patient_id=patient_identifier_info.patient_id;
 
 -- CREATE PATIENT DATA MATERIALIZED VIEW
-CREATE TABLE IF NOT EXISTS patient_data (
+CREATE TABLE IF NOT EXISTS patient_data_matvw (
     patient_id INT(11),
     identifier VARCHAR(50),
     identifier_type_id INT(11),
     identifier_type_name VARCHAR(50),
     identifier_location_id INT(11),
     identifier_location_name VARCHAR(255),
+    identifier_date_created DATE,
     identifier_location_retired TINYINT(1),
-    given_name VARCHAR(50),
-    family_name VARCHAR(50),
-    name_preferred TINYINT(1),
     birthdate DATE,
+    age INT,
+    age_range VARCHAR(50),
     gender VARCHAR(50),
     patient_voided TINYINT(1),
-    dead TINYINT(1)
+    dead TINYINT(1),
+    facility_name VARCHAR(255),
+    facility_id INT(11),
+    facility_dhis_ou_id VARCHAR(255),
+    facility_retired TINYINT(1),
+    district_name VARCHAR(255),
+    district_id INT(11),
+    district_retired TINYINT(1),
+    province_name VARCHAR(255),
+    province_id INT(11),
+    province_retired TINYINT(1)
 ) ENGINE=INNODB;
 
 -- CREATE INDEXES FOR PATIENT DATA MATERIALIZED VIEW
 CREATE INDEX patient_id_idx ON patient_data_matvw(patient_id);
+CREATE INDEX identifier_date_created_idx ON patient_data_matvw(identifier_date_created);
+CREATE INDEX facility_name_idx ON patient_data_matvw(facility_name);
+CREATE INDEX district_name_idx ON patient_data_matvw(district_name);
+CREATE INDEX province_name_idx ON patient_data_matvw(province_name);
+CREATE INDEX age_idx ON patient_data_matvw(age);
+CREATE INDEX age_range_idx ON patient_data_matvw(age_range);
+
+-- CREATE LOCATION DATA VIEW
+CREATE OR REPLACE VIEW location_data_vw AS SELECT facility_name,facility_id,facility_dhis_ou_id, facility_retired,district_name, district_id,district_retired,province_name,province_id,province_retired from (SELECT location.location_id as facility_id,location.name as facility_name,parent_location, location.retired as facility_retired  FROM location join location_tag_map on location.location_id = location_tag_map.location_id  join location_tag on location_tag.location_tag_id = location_tag_map.location_tag_id WHERE location_tag.location_tag_id = 5) as facility JOIN (SELECT location.location_id as district_id,location.name as district_name,location.retired as district_retired,parent_location FROM location join location_tag_map on location.location_id = location_tag_map.location_id  join location_tag on location_tag.location_tag_id = location_tag_map.location_tag_id WHERE location_tag.location_tag_id = 6) as district on facility.parent_location = district_id JOIN (SELECT location.location_id as province_id,location.name as province_name, location.retired as province_retired FROM location join location_tag_map on location.location_id = location_tag_map.location_id  join location_tag on location_tag.location_tag_id = location_tag_map.location_tag_id WHERE location_tag.location_tag_id = 7) as province on district.parent_location = province_id LEFT JOIN (SELECT location.location_id, value_reference as facility_dhis_ou_id from location join location_attribute on location.location_id = location_attribute.location_id WHERE attribute_type_id = 2 AND location_attribute.voided = 0) as dhis_ou on facility_id = dhis_ou.location_id;
+
+-- CREATE LOCATION DATA MATERIALIZED VIEW
+CREATE TABLE IF NOT EXISTS location_data_matvw (
+    facility_name VARCHAR(255),
+    facility_id INT(11),
+    facility_dhis_ou_id VARCHAR(255),
+    facility_retired TINYINT(1),
+    district_name VARCHAR(255),
+    district_id INT(11),
+    district_retired TINYINT(1),
+    province_name VARCHAR(255),
+    province_id INT(11),
+    province_retired TINYINT(1)
+) ENGINE=INNODB;
+
+-- CREATE INDEXES FOR LOCATION DATA MATERIALIZED VIEW
+CREATE INDEX facility_name_idx ON location_data_matvw(facility_name);
+CREATE INDEX district_name_idx ON location_data_matvw(district_name);
+CREATE INDEX province_name_idx ON location_data_matvw(province_name);
+CREATE INDEX facility_retired_idx ON location_data_matvw(facility_retired);
+CREATE INDEX district_retired_idx ON location_data_matvw(district_retired);
+CREATE INDEX province_retired_idx ON location_data_matvw(province_retired);
+
+-- CREATE A JOINT PATIENT AND VISIT VIEW
+CREATE OR REPLACE VIEW patient_visit_data_vw AS SELECT 
+    visit_data_matvw.patient_id,
+    identifier,
+    identifier_type_id,
+    identifier_type_name,
+    identifier_location_id,
+    identifier_location_name,
+    identifier_date_created,
+    identifier_location_retired,
+    birthdate,
+    age,
+    age_range,
+    gender,
+    patient_voided,
+    dead,
+    visit_id,
+    visit_type_id,
+    visit_type_name,
+    date_started,
+    date_stopped,
+    visit_location_id,
+    visit_location_name,
+    visit_location_retired,
+    visit_voided,
+    encounter_id,
+    encounter_type_id,
+    encounter_type_name,
+    encounter_location_id,
+    encounter_location_name,
+    encounter_datetime,
+    encounter_provider_id,
+    obs_id,
+    obs_concept_id,
+    obs_concept_name_en,
+    obs_datetime,
+    obs_location_id,
+    obs_location_name,
+    obs_value,
+    obs_value_concept_id,
+    visit_data_matvw.facility_name,
+    visit_data_matvw.facility_id,
+    visit_data_matvw.facility_retired,
+    visit_data_matvw.district_name,
+    visit_data_matvw.district_id,
+    visit_data_matvw.district_retired,
+    visit_data_matvw.province_name,
+    visit_data_matvw.province_id,
+    visit_data_matvw.province_retired
+ FROM patient_data_matvw JOIN visit_data_matvw ON patient_data_matvw.patient_id = visit_data_matvw.patient_id;
+
+-- CREATE AGE RANGE TABLE
+CREATE TABLE age_range(age_range_id INT AUTO_INCREMENT PRIMARY KEY ,age_range VARCHAR(6));
+
+-- INSERT CONSTANT AGE RANGES
+INSERT INTO age_range(age_range)VALUES ('<24'),('25-29'),('30-34'),('35-39'),('40-49'),('50-59'),('60+');
 
 -- CREATE PROCEDURE FOR REFRESHING MATERIALIZED VIEWS
 DELIMITER $$
@@ -94,10 +216,33 @@ CREATE PROCEDURE RefreshMaterializedViews()
     BEGIN
         TRUNCATE TABLE visit_data_matvw;
         TRUNCATE TABLE patient_data_matvw;
-        INSERT INTO visit_data_matvw (SELECT * FROM visit_data_vw);
-        INSERT INTO patient_data_matvw (SELECT * FROM patient_data_vw);
-    END
+	TRUNCATE TABLE location_data_matvw;
+        INSERT INTO location_data_matvw (SELECT * FROM location_data_vw);
+        INSERT INTO visit_data_matvw(SELECT * FROM visit_data_vw join location_data_vw on visit_data_vw.visit_location_id = location_data_vw.facility_id );
+        INSERT INTO patient_data_matvw (patient_id,identifier,identifier_type_id,identifier_type_name,identifier_location_id,identifier_location_name,identifier_date_created,identifier_location_retired,birthdate,age,gender,patient_voided,dead,facility_name,facility_id,facility_dhis_ou_id,facility_retired,district_name,district_id,district_retired,province_name,province_id,province_retired) SELECT * FROM patient_data_vw join location_data_vw on patient_data_vw.identifier_location_id = location_data_vw.facility_id;
+    END;
+
+CREATE TRIGGER age_range BEFORE INSERT ON patient_data_matvw
+FOR EACH ROW
+BEGIN
+    IF NEW.age <= 24 THEN
+        SET NEW.age_range = '<24';
+    ELSEIF NEW.age BETWEEN 25 AND 29 THEN
+        SET NEW.age_range = '25-29';
+    ELSEIF NEW.age BETWEEN 30 AND 34 THEN
+        SET NEW.age_range = '30-34';
+    ELSEIF NEW.age BETWEEN 35 AND 39 THEN
+        SET NEW.age_range = '35-39';
+    ELSEIF NEW.age BETWEEN 40 AND 49 THEN
+        SET NEW.age_range = '40-49';
+    ELSEIF NEW.age BETWEEN 50 AND 59 THEN
+        SET NEW.age_range = '50-59';
+    ELSEIF NEW.age >= 60 THEN
+        SET NEW.age_range = '60+';
+    END IF;
+END;
 $$
 
+GRANT EXECUTE ON PROCEDURE openmrs.RefreshMaterializedViews TO 'smartcerv'@'%';
 -- REFRESH MATERIALIZED VIEWS
 CALL RefreshMaterializedViews();
