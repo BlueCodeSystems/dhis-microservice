@@ -247,7 +247,6 @@ def get_data_elements(location, month, connection_pool):
     }
     
     indicator_values = indicator_list(location, month, connection_pool)
-    print(indicator_values)
 
     for indicator in indicator_values:
         data_element = data_element_ids[indicator]
@@ -305,9 +304,7 @@ def generate_json_payload(args):
     org_unit_id = args[1]
     month = args[2]
     data_set_id = smartcerv_config.DHIS2_DATASET
-    #data_set_id = 'oIZPVojzsdH'
     data_elements = get_data_elements(location, month, connection_pool)
-    #Get the complete date and period of the report
     dates = get_formatted_dates(month)
     period = dates['period']
     complete_date = dates['complete_date']
@@ -324,24 +321,22 @@ def main():
     try:
         print('Script started')
         start_time = round(time.time(), 4)
+        #log time 
+        print('\n\n','['+datetime.datetime.now().strftime('%c')+']')
         # Refresh the materialized views
         connection = mysql.connector.connect(host = smartcerv_config.OPENMRS_HOST, database = smartcerv_config.OPENMRS_DB, user = smartcerv_config.OPENMRS_USER, password = smartcerv_config.OPENMRS_PASS)
-        #connection = mysql.connector.connect(host = '34.240.241.171', database = 'openmrs', user = 'smartcerv', password = 'smartcerv')
         if connection.is_connected():
             cursor = connection.cursor(dictionary = True)
             cursor.execute('CALL RefreshMaterializedViews()')
             connection.commit()
         
         url = smartcerv_config.DHIS2_HOST+smartcerv_config.DHIS2_DATA_VALUE_SET_REST_API_ENDPOINT   
-        #url = 'https://dhis.bluecodeltd.com/api/dataValueSets/'
-        print(url)
-        dhis_credentials = (smartcerv_config.DHIS2_USER, smartcerv_config.DHIS2_PASS)        
-        #dhis_credentials = ('admin', 'district')
+        dhis_credentials = (smartcerv_config.DHIS2_USER, smartcerv_config.DHIS2_PASS)
         month = sys.argv[1]
         facility_ids = get_facility_ids(cursor)
-        print(facility_ids)
         facility_info = []
         facilities = []
+        
         for facility in facility_ids:
             facility_info.append((facility['facility_id'], facility['facility_dhis_ou_id'], month))
             facilities.append(facility['facility_name'])  
@@ -351,7 +346,6 @@ def main():
         
         #POST to dhis api
         for org_unit_payload in json_payload.values():
-            print(org_unit_payload)
             response = requests.post(url, auth = dhis_credentials, json = org_unit_payload, headers = {"Content-Type":"application/json"})
             print(response.json())
         
