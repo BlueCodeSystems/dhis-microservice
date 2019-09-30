@@ -4,7 +4,7 @@
 export SCRIPT=etlscript.py
 
 #set enviromental variables
-export OPENMRS_USER=openmrs
+export OPENMRS_USER=openmrs_username
 export OPENMRS_PASS=XXXXXXXXXXXXXXXXXXX
 export OPENMRS_DB=db_name
 export OPENMRS_HOST=127.0.0.1
@@ -13,7 +13,7 @@ export DHIS2_PASS=XXXXXXXXXXXXXX
 export DHIS2_HOST=https://dhis.example.org
 export DHIS2_DATASET=oIZPVojzsdH
 export DHIS2_DATA_VALUE_SET_REST_API_ENDPOINT=/api/dataValueSets
-export REPORT_MONTH=`date +%m-%Y`
+export REPORT_MONTH=`date +%m-%Y -d '1 month ago'`
 export LOG_FILE=./logs
 
 if [ ! -e $LOG_FILE ]; then
@@ -22,7 +22,7 @@ fi
 
 exec 3>&1 1>>${LOG_FILE} 2>&1
 
-env/bin/python3.7 script/$SCRIPT $REPORT_MONTH
+venv/bin/python script/$SCRIPT $REPORT_MONTH
 
 unset OPENMRS_USER
 unset OPENMRS_PASS

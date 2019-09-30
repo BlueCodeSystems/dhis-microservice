@@ -319,10 +319,10 @@ def generate_json_payload(args):
 # Main thread
 def main():
     try:
-        print('Script started')
+        #log time
+        print('Script started: ['+datetime.datetime.now().strftime('%c')+']')
         start_time = round(time.time(), 4)
         #log time 
-        print('\n\n','['+datetime.datetime.now().strftime('%c')+']')
         # Refresh the materialized views
         connection = mysql.connector.connect(host = smartcerv_config.OPENMRS_HOST, database = smartcerv_config.OPENMRS_DB, user = smartcerv_config.OPENMRS_USER, password = smartcerv_config.OPENMRS_PASS)
         if connection.is_connected():
@@ -336,7 +336,7 @@ def main():
         facility_ids = get_facility_ids(cursor)
         facility_info = []
         facilities = []
-        
+
         for facility in facility_ids:
             facility_info.append((facility['facility_id'], facility['facility_dhis_ou_id'], month))
             facilities.append(facility['facility_name'])  
@@ -350,7 +350,7 @@ def main():
             print(response.json())
         
         duration = round(round(time.time(), 4) - start_time)
-        print('Script completed in: ', duration, 's')
+        print('Script completed: ['+datetime.datetime.now().strftime('%c')+'] in ', duration, 's')
   
     except Error as e:
         print('An error occurred: ', e)
