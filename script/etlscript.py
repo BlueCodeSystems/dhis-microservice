@@ -247,7 +247,7 @@ def get_data_elements(location, month, connection_pool):
     }
     
     indicator_values = indicator_list(location, month, connection_pool)
-
+    print(indicator_values)
     for indicator in indicator_values:
         data_element = data_element_ids[indicator]
         for visit_type in indicator_values[indicator]:
@@ -263,7 +263,7 @@ def get_data_elements(location, month, connection_pool):
 
 # Get facility information
 def get_facility_ids(cursor):
-    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0'
+    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0 AND province_id = 4839'
     cursor.execute(query)
     facility_ids = cursor.fetchall()
     return facility_ids
@@ -302,27 +302,34 @@ def generate_json_payload(args):
 
     location = args[0]
     org_unit_id = args[1]
-    month = args[2]
+    facility_name = args[2]
+    month = args[3]
+    url = args[4]
+    dhis_credentials = args[5]
     data_set_id = smartcerv_config.DHIS2_DATASET
     data_elements = get_data_elements(location, month, connection_pool)
     dates = get_formatted_dates(month)
     period = dates['period']
     complete_date = dates['complete_date']
-    return {
+    json_payload = {
         "dataSet": data_set_id,
         "completeDate": complete_date,
         "period": period,
         "orgUnit": org_unit_id,
         "dataValues": data_elements
     }
+    
+    #POST to dhis api
+    response = requests.post(url, auth = dhis_credentials, json = json_payload, headers = {"Content-Type":"application/json"})
+    print(facility_name, ' : ', response.json())
+    return response
 
 # Main thread
 def main():
     try:
         #log time
-        print('Script started: ['+datetime.datetime.now().strftime('%c')+']')
+        print('\n\nScript started: ['+datetime.datetime.now().strftime('%c')+']')
         start_time = round(time.time(), 4)
-        #log time 
         # Refresh the materialized views
         connection = mysql.connector.connect(host = smartcerv_config.OPENMRS_HOST, database = smartcerv_config.OPENMRS_DB, user = smartcerv_config.OPENMRS_USER, password = smartcerv_config.OPENMRS_PASS)
         if connection.is_connected():
@@ -338,19 +345,14 @@ def main():
         facilities = []
 
         for facility in facility_ids:
-            facility_info.append((facility['facility_id'], facility['facility_dhis_ou_id'], month))
-            facilities.append(facility['facility_name'])  
+            facility_info.append((facility['facility_id'], facility['facility_dhis_ou_id'], facility['facility_name'], month, url, dhis_credentials))
+            facilities.append(facility['facility_name'])
 
         with ProcessPoolExecutor(max_workers = 11) as executor:
-            json_payload = dict(zip(facilities, executor.map(generate_json_payload, facility_info)))
-        
-        #POST to dhis api
-        for org_unit_payload in json_payload.values():
-            response = requests.post(url, auth = dhis_credentials, json = org_unit_payload, headers = {"Content-Type":"application/json"})
-            print(response.json())
+            responses = dict(zip(facilities, executor.map(generate_json_payload, facility_info)))
         
         duration = round(round(time.time(), 4) - start_time)
-        print('Script completed: ['+datetime.datetime.now().strftime('%c')+'] in ', duration, 's')
+        print('Script completed: ['+datetime.datetime.now().strftime('%c')+'] in', duration, 's')
   
     except Error as e:
         print('An error occurred: ', e)
