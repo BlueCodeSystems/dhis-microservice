@@ -222,7 +222,7 @@ def sum_of_rows(lists):
     return result
 
 # Create list of dictionary values
-def get_data_elements(location, month, connection_pool):
+def get_data_elements(location, month, connection_pool, facility_name):
     data_elements = []
     category_option_combos = {
         'initial_visit': ['ZxsS9HGdhV1', 'AHS2fnqf971', 'VMMUi2HZOpS', 'PqG5oFcHpLf', 'I5LyQqIyqX9', 'eb9lrs8dq64', 'NmBwhTMgYDK', 'CNKn8YRApww', 'kImwcR75U8J', 'wJlF4hrj7IA', 'ZDexPKuoua5', 'nc4NgEe5n91', 'mpAMSeHtHhc'],
@@ -243,7 +243,7 @@ def get_data_elements(location, month, connection_pool):
     }
     
     indicator_values = indicator_list(location, month, connection_pool)
-    print(indicator_values)
+    print(facility_name, ' : ', indicator_values)
     for indicator in indicator_values:
         data_element = data_element_ids[indicator]
         for visit_type in indicator_values[indicator]:
@@ -303,7 +303,7 @@ def generate_json_payload(args):
     url = args[4]
     dhis_credentials = args[5]
     data_set_id = smartcerv_config.DHIS2_DATASET
-    data_elements = get_data_elements(location, month, connection_pool)
+    data_elements = get_data_elements(location, month, connection_pool, facility_name)
     dates = get_formatted_dates(month)
     period = dates['period']
     complete_date = dates['complete_date']
@@ -344,7 +344,7 @@ def main():
             facility_info.append((facility['facility_id'], facility['facility_dhis_ou_id'], facility['facility_name'], month, url, dhis_credentials))
             facilities.append(facility['facility_name'])
 
-        with ProcessPoolExecutor(max_workers = 11) as executor:
+        with ProcessPoolExecutor(max_workers = 6) as executor:
             responses = dict(zip(facilities, executor.map(generate_json_payload, facility_info)))
         
         duration = round(round(time.time(), 4) - start_time)
