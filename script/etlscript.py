@@ -176,9 +176,6 @@ def indicator_rows(args):
 # Get counts for each of the indicators
 def indicator_list(location, month, connection_pool):
     result = {}
-    '''connections = []
-    for _ in range(0,5):
-        connections.append(connection_pool.get_connection())'''
     indicators = [
         ([{'question':165182, 'answer':165183}], [2, 5, 6], location, month, connection_pool),
         ([{'question':165155, 'answer':1}], [2, 5, 6], location, month, connection_pool),
@@ -193,9 +190,6 @@ def indicator_list(location, month, connection_pool):
     with ThreadPoolExecutor(max_workers = 5) as executor:            
         indicator_names = ('suspect_cancer', 'via_screening', 'positive_via', 'cryo_thermal', 'prev_delayed_cryo_thermal', 'delayed_cryo_thermal', 'post_treatment_complication', 'lesions')
         result = dict(zip(indicator_names, executor.map(indicator_rows, indicators)))
-    
-    '''for connection in connections:
-        connection.close()'''
 
     suspect_cancer = result['suspect_cancer']
     via_screening = result['via_screening']
