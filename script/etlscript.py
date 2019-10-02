@@ -155,7 +155,8 @@ def indicator_rows(args):
     visit_type_ids = args[1]
     visit_location_id = args[2]
     visit_month = args[3]
-    connection = args[4]
+    connection_pool = args[4]
+    connection = connection_pool.get_connection()
 
     # Initial Visit - visit_type_id = 2
     initial_visit = visit_type_func(indicators, visit_type_ids[0], visit_location_id, visit_month, connection)
@@ -168,32 +169,33 @@ def indicator_rows(args):
 
     # return result as a dictionary
     result = {'initial_visit': initial_visit, 'one_year_followup': one_year_followup, 'routine_visit': routine_visit}
+    connection.close()
 
     return result
 
 # Get counts for each of the indicators
 def indicator_list(location, month, connection_pool):
     result = {}
-    connections = []
-    for _ in range(0,8):
-        connections.append(connection_pool.get_connection())
+    '''connections = []
+    for _ in range(0,5):
+        connections.append(connection_pool.get_connection())'''
     indicators = [
-        ([{'question':165182, 'answer':165183}], [2, 5, 6], location, month, connections[0]),
-        ([{'question':165155, 'answer':1}], [2, 5, 6], location, month, connections[1]),
-        ([{'question':165160, 'answer':165162}], [2, 5, 6], location, month, connections[2]),
-        ([{'question':165219, 'answer':165174, 'answer1':165175}], [2, 5, 6], location, month, connections[3]),
-        ([], [3, 3, 3], location, month, connections[4]),
-        ([{'question':165219, 'answer':165176, 'answer1':165177}], [2, 5, 6], location, month, connections[5]),
-        ([{'question':165143, 'answer':165144, 'answer1':165145, 'answer2':165146}], [2, 5, 6], location, month, connections[6]),
-        ([{'question':165182, 'answer':165184}], [2, 5, 6],  location, month, connections[7])
+        ([{'question':165182, 'answer':165183}], [2, 5, 6], location, month, connection_pool),
+        ([{'question':165155, 'answer':1}], [2, 5, 6], location, month, connection_pool),
+        ([{'question':165160, 'answer':165162}], [2, 5, 6], location, month, connection_pool),
+        ([{'question':165219, 'answer':165174, 'answer1':165175}], [2, 5, 6], location, month, connection_pool),
+        ([], [3, 3, 3], location, month, connection_pool),
+        ([{'question':165219, 'answer':165176, 'answer1':165177}], [2, 5, 6], location, month, connection_pool),
+        ([{'question':165143, 'answer':165144, 'answer1':165145, 'answer2':165146}], [2, 5, 6], location, month, connection_pool),
+        ([{'question':165182, 'answer':165184}], [2, 5, 6],  location, month, connection_pool)
     ]
 
-    with ThreadPoolExecutor(max_workers = 10) as executor:            
+    with ThreadPoolExecutor(max_workers = 5) as executor:            
         indicator_names = ('suspect_cancer', 'via_screening', 'positive_via', 'cryo_thermal', 'prev_delayed_cryo_thermal', 'delayed_cryo_thermal', 'post_treatment_complication', 'lesions')
         result = dict(zip(indicator_names, executor.map(indicator_rows, indicators)))
     
-    for connection in connections:
-        connection.close()
+    '''for connection in connections:
+        connection.close()'''
 
     suspect_cancer = result['suspect_cancer']
     via_screening = result['via_screening']
@@ -293,7 +295,7 @@ def get_formatted_dates(month):
 def generate_json_payload(args):
     connection_pool = mysql.connector.pooling.MySQLConnectionPool(
             pool_name = 'connection_pool',
-            pool_size = 10,
+            pool_size = 5,
             host = smartcerv_config.OPENMRS_HOST, 
             database = smartcerv_config.OPENMRS_DB, 
             user = smartcerv_config.OPENMRS_USER, 
