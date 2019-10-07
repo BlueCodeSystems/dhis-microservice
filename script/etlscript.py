@@ -6,10 +6,9 @@ import json
 import sys
 import requests
 import multiprocessing
-from multiprocessing import Manager
 import datetime
 import time
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 
 # Function definitions
 
@@ -158,11 +157,8 @@ def indicator_rows(args):
     visit_location_id = args[2]
     visit_month = args[3]
     connection_pool = args[4]
-    connection_list = args[5]
     connection = connection_pool.get_connection()
-    print(multiprocessing.current_process().name,', Connection: ', connection.connection_id, 'opened.')
-    connection_list.append(connection.connection_id)
-    print('\nCurrent connections: ', len(connection_list))
+
     # Initial Visit - visit_type_id = 2
     initial_visit = visit_type_func(indicators, visit_type_ids[0], visit_location_id, visit_month, connection)
 
@@ -174,33 +170,27 @@ def indicator_rows(args):
 
     # return result as a dictionary
     result = {'initial_visit': initial_visit, 'one_year_followup': one_year_followup, 'routine_visit': routine_visit}
-    print(multiprocessing.current_process().name,', Connection: ', connection.connection_id, 'closed.')
-    connection_list.remove(connection.connection_id)
-    print('\nCurrent connections: ', len(connection_list))
     connection.close()
 
     return result
 
 # Get counts for each of the indicators
-def indicator_list(location, month, connection_pool, connection_list):
+def indicator_list(location, month, connection_pool):
     result = {}
     indicators = [
-        ([{'question':165182, 'answer':165183}], [2, 5, 6], location, month, connection_pool, connection_list),
-        ([{'question':165155, 'answer':1}], [2, 5, 6], location, month, connection_pool, connection_list),
-        ([{'question':165160, 'answer':165162}], [2, 5, 6], location, month, connection_pool, connection_list),
-        ([{'question':165219, 'answer':165174, 'answer1':165175}], [2, 5, 6], location, month, connection_pool, connection_list),
-        ([], [3, 3, 3], location, month, connection_pool, connection_list),
-        ([{'question':165219, 'answer':165176, 'answer1':165177}], [2, 5, 6], location, month, connection_pool, connection_list),
-        ([{'question':165143, 'answer':165144, 'answer1':165145, 'answer2':165146}], [2, 5, 6], location, month, connection_pool, connection_list),
-        ([{'question':165182, 'answer':165184}], [2, 5, 6],  location, month, connection_pool, connection_list)
+        ([{'question':165182, 'answer':165183}], [2, 5, 6], location, month, connection_pool),
+        ([{'question':165155, 'answer':1}], [2, 5, 6], location, month, connection_pool),
+        ([{'question':165160, 'answer':165162}], [2, 5, 6], location, month, connection_pool),
+        ([{'question':165219, 'answer':165174, 'answer1':165175}], [2, 5, 6], location, month, connection_pool),
+        ([], [3, 3, 3], location, month, connection_pool),
+        ([{'question':165219, 'answer':165176, 'answer1':165177}], [2, 5, 6], location, month, connection_pool),
+        ([{'question':165143, 'answer':165144, 'answer1':165145, 'answer2':165146}], [2, 5, 6], location, month, connection_pool),
+        ([{'question':165182, 'answer':165184}], [2, 5, 6],  location, month, connection_pool)
     ]
 
-    '''with ThreadPoolExecutor(max_workers = 1) as executor:            
+    with ThreadPoolExecutor(max_workers = 2) as executor:            
         indicator_names = ('suspect_cancer', 'via_screening', 'positive_via', 'cryo_thermal', 'prev_delayed_cryo_thermal', 'delayed_cryo_thermal', 'post_treatment_complication', 'lesions')
-        result = dict(zip(indicator_names, executor.map(indicator_rows, indicators)))'''
-
-    indicator_names = ('suspect_cancer', 'via_screening', 'positive_via', 'cryo_thermal', 'prev_delayed_cryo_thermal', 'delayed_cryo_thermal', 'post_treatment_complication', 'lesions')
-    result = dict(zip(indicator_names, map(indicator_rows, indicators)))
+        result = dict(zip(indicator_names, executor.map(indicator_rows, indicators)))
 
     suspect_cancer = result['suspect_cancer']
     via_screening = result['via_screening']
@@ -233,7 +223,7 @@ def sum_of_rows(lists):
     return result
 
 # Create list of dictionary values
-def get_data_elements(location, month, connection_pool, facility_name, connection_list):
+def get_data_elements(location, month, connection_pool, facility_name):
     data_elements = []
     category_option_combos = {
         'initial_visit': ['ZxsS9HGdhV1', 'AHS2fnqf971', 'VMMUi2HZOpS', 'PqG5oFcHpLf', 'I5LyQqIyqX9', 'eb9lrs8dq64', 'NmBwhTMgYDK', 'CNKn8YRApww', 'kImwcR75U8J', 'wJlF4hrj7IA', 'ZDexPKuoua5', 'nc4NgEe5n91', 'mpAMSeHtHhc'],
@@ -253,8 +243,8 @@ def get_data_elements(location, month, connection_pool, facility_name, connectio
         'lesions': 'VXXbhsUFBEY'
     }
     
-    indicator_values = indicator_list(location, month, connection_pool, connection_list)
-    #print(facility_name, ' : ', indicator_values)
+    indicator_values = indicator_list(location, month, connection_pool)
+    print(facility_name, ' : ', indicator_values)
     for indicator in indicator_values:
         data_element = data_element_ids[indicator]
         for visit_type in indicator_values[indicator]:
@@ -307,18 +297,14 @@ def generate_json_payload(args):
             password = smartcerv_config.OPENMRS_PASS
     )
 
-    #multiprocessing.current_process().name = 'smartcerv_process'
-    print('\n', multiprocessing.current_process().name, 'started.\n')
-
     location = args[0]
     org_unit_id = args[1]
     facility_name = args[2]
     month = args[3]
     url = args[4]
     dhis_credentials = args[5]
-    connection_list = args[6]
     data_set_id = smartcerv_config.DHIS2_DATASET
-    data_elements = get_data_elements(location, month, connection_pool, facility_name, connection_list)
+    data_elements = get_data_elements(location, month, connection_pool, facility_name)
     dates = get_formatted_dates(month)
     period = dates['period']
     complete_date = dates['complete_date']
@@ -332,8 +318,7 @@ def generate_json_payload(args):
     
     #POST to dhis api
     response = requests.post(url, auth = dhis_credentials, json = json_payload, headers = {"Content-Type":"application/json"})
-    #print(facility_name, ' : ', response.json())
-    print('\n', multiprocessing.current_process().name, 'terminated.\n')
+    print(facility_name, ' : ', response.json())
     return response
 
 # Main thread
@@ -343,8 +328,6 @@ def main():
         print('\n\nScript started: ['+datetime.datetime.now().strftime('%c')+']')
         start_time = round(time.time(), 4)
         # Refresh the materialized views
-        manager = multiprocessing.Manager()
-        connection_list = manager.list()
         connection = mysql.connector.connect(host = smartcerv_config.OPENMRS_HOST, database = smartcerv_config.OPENMRS_DB, user = smartcerv_config.OPENMRS_USER, password = smartcerv_config.OPENMRS_PASS)
         if connection.is_connected():
             cursor = connection.cursor(dictionary = True)
@@ -359,16 +342,13 @@ def main():
         facilities = []
 
         for facility in facility_ids:
-            facility_info.append((facility['facility_id'], facility['facility_dhis_ou_id'], facility['facility_name'], month, url, dhis_credentials, connection_list))
+            facility_info.append((facility['facility_id'], facility['facility_dhis_ou_id'], facility['facility_name'], month, url, dhis_credentials))
             facilities.append(facility['facility_name'])
 
-        with ProcessPoolExecutor(max_workers = 1) as executor:
-            responses = dict(zip(facilities, executor.map(generate_json_payload, facility_info)))
-
-        print('Connections: ', len(connection_list))
+        responses = dict(zip(facilities, map(generate_json_payload, facility_info)))
         
         duration = round(round(time.time(), 4) - start_time)
-        print('Script completed: ['+datetime.datetime.now().strftime('%c')+'] in', duration, 's')
+        print('\nScript completed: ['+datetime.datetime.now().strftime('%c')+'] in', duration, 's')
   
     except Error as e:
         print('An error occurred: ', e)
