@@ -8,7 +8,7 @@ import requests
 import multiprocessing
 import datetime
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 # Function definitions
 
@@ -185,7 +185,7 @@ def indicator_list(location, month, connection_pool):
         ([], [3, 3, 3], location, month, connection_pool),
         ([{'question':165219, 'answer':165176, 'answer1':165177}], [2, 5, 6], location, month, connection_pool),
         ([{'question':165143, 'answer':165144, 'answer1':165145, 'answer2':165146}], [2, 5, 6], location, month, connection_pool),
-        ([{'question':165182, 'answer':165184}], [2, 5, 6],  location, month, connection_pool)
+        ([{'question':165182, 'answer':165184}], [2, 5, 6], location, month, connection_pool)
     ]
 
     with ThreadPoolExecutor(max_workers = 2) as executor:            
@@ -291,9 +291,9 @@ def generate_json_payload(args):
     connection_pool = mysql.connector.pooling.MySQLConnectionPool(
             pool_name = 'connection_pool',
             pool_size = 5,
-            host = smartcerv_config.OPENMRS_HOST, 
-            database = smartcerv_config.OPENMRS_DB, 
-            user = smartcerv_config.OPENMRS_USER, 
+            host = smartcerv_config.OPENMRS_HOST,
+            database = smartcerv_config.OPENMRS_DB,
+            user = smartcerv_config.OPENMRS_USER,
             password = smartcerv_config.OPENMRS_PASS
     )
 
@@ -344,8 +344,8 @@ def main():
         for facility in facility_ids:
             facility_info.append((facility['facility_id'], facility['facility_dhis_ou_id'], facility['facility_name'], month, url, dhis_credentials))
             facilities.append(facility['facility_name'])
-
-        responses = dict(zip(facilities, map(generate_json_payload, facility_info)))
+        with ProcessPoolExecutor(max_workers=1) as executor:
+            responses = dict(zip(facilities, executor.map(generate_json_payload, facility_info)))
         
         duration = round(round(time.time(), 4) - start_time)
         print('\nScript completed: ['+datetime.datetime.now().strftime('%c')+'] in', duration, 's')
