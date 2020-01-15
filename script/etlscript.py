@@ -175,7 +175,7 @@ def indicator_rows(args):
     return result
 
 # Get counts for each of the indicators
-def indicator_list(location, month, connection_pool):
+def indicator_list(location, month, connection_pool, is_active):
     result = {}
     indicators = [
         ([{'question':165182, 'answer':165183}], [2, 5, 6], location, month, connection_pool),
@@ -188,23 +188,26 @@ def indicator_list(location, month, connection_pool):
         ([{'question':165182, 'answer':165184}], [2, 5, 6], location, month, connection_pool)
     ]
 
-    with ThreadPoolExecutor(max_workers = 2) as executor:            
-        indicator_names = ('suspect_cancer', 'via_screening', 'positive_via', 'cryo_thermal', 'prev_delayed_cryo_thermal', 'delayed_cryo_thermal', 'post_treatment_complication', 'lesions')
-        result = dict(zip(indicator_names, executor.map(indicator_rows, indicators)))
+    if (is_active):
+        with ThreadPoolExecutor(max_workers = 2) as executor:            
+            indicator_names = ('suspect_cancer', 'via_screening', 'positive_via', 'cryo_thermal', 'prev_delayed_cryo_thermal', 'delayed_cryo_thermal', 'post_treatment_complication', 'lesions')
+            result = dict(zip(indicator_names, executor.map(indicator_rows, indicators)))
 
-    suspect_cancer = result['suspect_cancer']
-    via_screening = result['via_screening']
-    suspect_cancer_via_screening = aggregate_indicators(suspect_cancer, via_screening)
-    result['suspect_cancer_via_screening'] = suspect_cancer_via_screening
-    
-    del result['prev_delayed_cryo_thermal']['one_year_followup']
-    del result['prev_delayed_cryo_thermal']['routine_visit']
-    
-    #Total number of clients treated with cryotherapy/thermal coagulation (5+6)
-    list_of_rows = [result['cryo_thermal']['initial_visit'], result['cryo_thermal']['one_year_followup'], result['cryo_thermal']['routine_visit'], result['prev_delayed_cryo_thermal']['initial_visit']]
-    total_cryo_thermal = {}
-    total_cryo_thermal['initial_visit'] = sum_of_rows(list_of_rows)
-    result['total_cryo_thermal'] = total_cryo_thermal
+        suspect_cancer = result['suspect_cancer']
+        via_screening = result['via_screening']
+        suspect_cancer_via_screening = aggregate_indicators(suspect_cancer, via_screening)
+        result['suspect_cancer_via_screening'] = suspect_cancer_via_screening
+        
+        del result['prev_delayed_cryo_thermal']['one_year_followup']
+        del result['prev_delayed_cryo_thermal']['routine_visit']
+        
+        #Total number of clients treated with cryotherapy/thermal coagulation (5+6)
+        list_of_rows = [result['cryo_thermal']['initial_visit'], result['cryo_thermal']['one_year_followup'], result['cryo_thermal']['routine_visit'], result['prev_delayed_cryo_thermal']['initial_visit']]
+        total_cryo_thermal = {}
+        total_cryo_thermal['initial_visit'] = sum_of_rows(list_of_rows)
+        result['total_cryo_thermal'] = total_cryo_thermal
+    else:
+        result = {'delayed_cryo_thermal': {'initial_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'routine_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'one_year_followup': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, 'cryo_thermal': {'initial_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'routine_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'one_year_followup': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, 'suspect_cancer': {'initial_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'routine_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'one_year_followup': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, 'prev_delayed_cryo_thermal': {'initial_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, 'total_cryo_thermal': {'initial_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, 'via_screening': {'initial_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'routine_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'one_year_followup': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, 'post_treatment_complication': {'initial_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'routine_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'one_year_followup': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, 'suspect_cancer_via_screening': {'initial_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'routine_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'one_year_followup': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, 'positive_via': {'initial_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'routine_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'one_year_followup': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, 'lesions': {'initial_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'routine_visit': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'one_year_followup': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
         
     return result
 
@@ -223,7 +226,7 @@ def sum_of_rows(lists):
     return result
 
 # Create list of dictionary values
-def get_data_elements(location, month, connection_pool, facility_name):
+def get_data_elements(location, month, connection_pool, facility_name, is_active):
     data_elements = []
     category_option_combos = {
         'initial_visit': ['ZxsS9HGdhV1', 'AHS2fnqf971', 'VMMUi2HZOpS', 'PqG5oFcHpLf', 'I5LyQqIyqX9', 'eb9lrs8dq64', 'NmBwhTMgYDK', 'CNKn8YRApww', 'kImwcR75U8J', 'wJlF4hrj7IA', 'ZDexPKuoua5', 'nc4NgEe5n91', 'mpAMSeHtHhc'],
@@ -243,7 +246,7 @@ def get_data_elements(location, month, connection_pool, facility_name):
         'lesions': 'VXXbhsUFBEY'
     }
     
-    indicator_values = indicator_list(location, month, connection_pool)
+    indicator_values = indicator_list(location, month, connection_pool, is_active)
     print(facility_name, ' : ', indicator_values)
     for indicator in indicator_values:
         data_element = data_element_ids[indicator]
@@ -307,8 +310,9 @@ def generate_json_payload(args):
     month = args[3]
     url = args[4]
     dhis_credentials = args[5]
+    is_active = args[6]
     data_set_id = smartcerv_config.DHIS2_DATASET
-    data_elements = get_data_elements(location, month, connection_pool, facility_name)
+    data_elements = get_data_elements(location, month, connection_pool, facility_name, is_active)
     dates = get_formatted_dates(month)
     period = dates['period']
     complete_date = dates['complete_date']
