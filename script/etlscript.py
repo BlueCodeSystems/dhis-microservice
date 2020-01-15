@@ -247,7 +247,8 @@ def get_data_elements(location, month, connection_pool, facility_name, is_active
     }
     
     indicator_values = indicator_list(location, month, connection_pool, is_active)
-    print(facility_name, ' : ', indicator_values)
+    if (is_active):
+        print(facility_name, ' - ', is_active, ' : ', indicator_values)
     for indicator in indicator_values:
         data_element = data_element_ids[indicator]
         for visit_type in indicator_values[indicator]:
@@ -325,8 +326,8 @@ def generate_json_payload(args):
     }
     
     #POST to dhis api
-    response = requests.post(url, auth = dhis_credentials, json = json_payload, headers = {"Content-Type":"application/json"})
-    print(facility_name, ' : ', response.json())
+    response = json_payload#requests.post(url, auth = dhis_credentials, json = json_payload, headers = {"Content-Type":"application/json"})
+    #print(facility_name, ' : ', response.json())
     return response
 
 # Main thread
@@ -346,8 +347,12 @@ def main():
         dhis_credentials = (smartcerv_config.DHIS2_USER, smartcerv_config.DHIS2_PASS)
         month = sys.argv[1]
         all_facilities = get_facilities(cursor, False)
-        active_facilities = get_facilies(cursor, True)
-        active_facility_ids = set(get_facilies(cursor, True).values())
+        active_facilities = get_facilities(cursor, True)
+        print('Active facilities : ', active_facilities)
+        active_facility_ids = set()
+        for facility in active_facilities:
+            active_facility_ids.add(facility['facility_id'])
+        print('Active facility ids : ', active_facility_ids)
         facility_info = []
         facility_names = []
 
@@ -359,6 +364,7 @@ def main():
             facility_names.append(facility['facility_name'])
         with ProcessPoolExecutor(max_workers=1) as executor:
             responses = dict(zip(facility_names, executor.map(generate_json_payload, facility_info)))
+        print('Number of facilities: ', len(responses))
         
         duration = round(round(time.time(), 4) - start_time)
         print('\nScript completed: ['+datetime.datetime.now().strftime('%c')+'] in', duration, 's')
