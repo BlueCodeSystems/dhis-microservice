@@ -259,10 +259,14 @@ def get_data_elements(location, month, connection_pool, facility_name):
     return data_elements
 
 # Get facility information
-def get_facility_ids(cursor):
-    query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0 AND facility_dhis_ou_id IS NOT NULL'
+def get_facility_ids(cursor, is_active):
+    if (is_active):
+        query = 'SELECT DISTINCT facility_id FROM patient_visit_data_vw WHERE visit_location_retired = 0'
+    else:
+        query = 'SELECT facility_name, facility_id, facility_dhis_ou_id FROM location_data_matvw WHERE facility_retired = 0 AND facility_dhis_ou_id IS NOT NULL'
     cursor.execute(query)
     facility_ids = cursor.fetchall()
+
     return facility_ids
 
 #Get formatted complete date and period for the report
@@ -337,11 +341,12 @@ def main():
         url = smartcerv_config.DHIS2_HOST+smartcerv_config.DHIS2_DATA_VALUE_SET_REST_API_ENDPOINT   
         dhis_credentials = (smartcerv_config.DHIS2_USER, smartcerv_config.DHIS2_PASS)
         month = sys.argv[1]
-        facility_ids = get_facility_ids(cursor)
+        all_facility_ids = get_facility_ids(cursor, False)
+        active_facility_ids = get_facility_ids(cursor, True)
         facility_info = []
         facilities = []
 
-        for facility in facility_ids:
+        for facility in all_facility_ids:
             facility_info.append((facility['facility_id'], facility['facility_dhis_ou_id'], facility['facility_name'], month, url, dhis_credentials))
             facilities.append(facility['facility_name'])
         with ProcessPoolExecutor(max_workers=1) as executor:
