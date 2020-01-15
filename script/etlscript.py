@@ -259,7 +259,7 @@ def get_data_elements(location, month, connection_pool, facility_name):
     return data_elements
 
 # Get facility information
-def get_facility_ids(cursor, is_active):
+def get_facilities(cursor, is_active):
     if (is_active):
         query = 'SELECT DISTINCT facility_id FROM patient_visit_data_vw WHERE visit_location_retired = 0'
     else:
@@ -341,8 +341,8 @@ def main():
         url = smartcerv_config.DHIS2_HOST+smartcerv_config.DHIS2_DATA_VALUE_SET_REST_API_ENDPOINT   
         dhis_credentials = (smartcerv_config.DHIS2_USER, smartcerv_config.DHIS2_PASS)
         month = sys.argv[1]
-        all_facility_ids = get_facility_ids(cursor, False)
-        active_facility_ids = get_facility_ids(cursor, True)
+        all_facility_ids = get_facilities(cursor, False)
+        active_facility_ids = get_facilies(cursor, True)
         facility_info = []
         facilities = []
 
