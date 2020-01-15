@@ -341,16 +341,20 @@ def main():
         url = smartcerv_config.DHIS2_HOST+smartcerv_config.DHIS2_DATA_VALUE_SET_REST_API_ENDPOINT   
         dhis_credentials = (smartcerv_config.DHIS2_USER, smartcerv_config.DHIS2_PASS)
         month = sys.argv[1]
-        all_facility_ids = get_facilities(cursor, False)
-        active_facility_ids = get_facilies(cursor, True)
+        all_facilities = get_facilities(cursor, False)
+        active_facilities = get_facilies(cursor, True)
+        active_facility_ids = set(get_facilies(cursor, True).values())
         facility_info = []
-        facilities = []
+        facility_names = []
 
-        for facility in all_facility_ids:
-            facility_info.append((facility['facility_id'], facility['facility_dhis_ou_id'], facility['facility_name'], month, url, dhis_credentials))
-            facilities.append(facility['facility_name'])
+        for facility in all_facilities:
+            is_active = False
+            if (facility['facility_id'] in active_facility_ids):
+                is_active = True
+            facility_info.append((facility['facility_id'], facility['facility_dhis_ou_id'], facility['facility_name'], month, url, dhis_credentials, is_active))
+            facility_names.append(facility['facility_name'])
         with ProcessPoolExecutor(max_workers=1) as executor:
-            responses = dict(zip(facilities, executor.map(generate_json_payload, facility_info)))
+            responses = dict(zip(facility_names, executor.map(generate_json_payload, facility_info)))
         
         duration = round(round(time.time(), 4) - start_time)
         print('\nScript completed: ['+datetime.datetime.now().strftime('%c')+'] in', duration, 's')
