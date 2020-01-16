@@ -364,7 +364,7 @@ def main():
         with ProcessPoolExecutor(max_workers=1) as executor:
             responses = dict(zip(facility_names, executor.map(generate_json_payload, facility_info)))
 	print('Number of active facilities: ', len(active_facility_ids)
-        print('Number of facilities: ', len(responses))
+    print('Number of facilities: ', len(responses))
         
         duration = round(round(time.time(), 4) - start_time)
         print('\nScript completed: ['+datetime.datetime.now().strftime('%c')+'] in', duration, 's')
