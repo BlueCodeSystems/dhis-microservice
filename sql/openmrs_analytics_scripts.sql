@@ -5,9 +5,10 @@ DROP TABLE IF EXISTS age_range;
 DROP TABLE IF EXISTS location_data_matvw;
 DROP TRIGGER IF EXISTS age_range;
 DROP PROCEDURE IF EXISTS RefreshMaterializedViews;
+DROP FUNCTION IF EXISTS ViralLoadRange;
 
 -- CREATE VISIT DATA VIEW
-CREATE OR REPLACE VIEW visit_data_vw AS SELECT patient_id, encounter_type_location.visit_id, visit_type_id, visit_type_name, date_started, date_stopped, visit_location_id, visit_location_name, visit_location_retired, visit_voided, obs_location.encounter_id, encounter_type_id, encounter_type_name, encounter_location_id, encounter_location_name, encounter_datetime, encounter_provider_id, obs_location.obs_id, obs_concept_id, obs_concept_name_en, obs_datetime, obs_location_id, obs_location_name, obs_value, obs_value_concept_id FROM
+CREATE OR REPLACE VIEW visit_data_vw AS SELECT patient_id, encounter_type_location.visit_id, visit_type_id, visit_type_name, date_started, date_stopped, visit_location_id, visit_location_name, visit_location_retired, visit_voided, obs_location.encounter_id, encounter_type_id, encounter_type_name, encounter_location_id, encounter_location_name, encounter_datetime, encounter_provider_id,encounter_provider_person_id, encounter_provider_name, encounter_provider_retired, obs_location.obs_id, obs_concept_id, obs_concept_name_en, obs_datetime, obs_location_id, obs_location_name, obs_value, obs_value_concept_id FROM
 (SELECT obs_id, name as obs_value from obs JOIN concept_name ON value_coded = concept_name.concept_id  WHERE value_coded is NOT NULL AND locale = 'en' AND concept_name.voided = 0 AND locale_preferred = 1
 UNION
 SELECT obs_id,value_text as obs_value from obs WHERE value_text is NOT NULL
@@ -20,7 +21,7 @@ JOIN
 JOIN
 (SELECT concept_id, name AS obs_concept_name_en FROM concept_name WHERE locale = 'en' AND concept_name.voided = 0 AND locale_preferred = 1) as obs_concept_name on obs_location.obs_concept_id = obs_concept_name.concept_id
 JOIN 
-(SELECT encounter.encounter_id, encounter_type_id, encounter_type.name AS encounter_type_name, encounter.location_id AS encounter_location_id, location.name AS encounter_location_name, encounter_datetime, encounter.visit_id, encounter_provider.provider_id AS encounter_provider_id FROM encounter JOIN encounter_type ON encounter.encounter_type = encounter_type.encounter_type_id JOIN location ON encounter.location_id = location.location_id LEFT JOIN encounter_provider ON encounter.encounter_id = encounter_provider.encounter_id WHERE encounter_provider.voided = 0 OR encounter_provider.voided is NULL) AS encounter_type_location ON encounter_type_location.encounter_id = obs_location.encounter_id 
+(SELECT encounter.encounter_id, encounter_type_id, encounter_type.name AS encounter_type_name, encounter.location_id AS encounter_location_id, location.name AS encounter_location_name, encounter_datetime, encounter.visit_id, encounter_provider.provider_id AS encounter_provider_id,provider.person_id AS encounter_provider_person_id, concat_ws(" ",given_name,family_name) AS encounter_provider_name, provider.retired AS encounter_provider_retired FROM encounter JOIN encounter_type ON encounter.encounter_type = encounter_type.encounter_type_id JOIN location ON encounter.location_id = location.location_id LEFT JOIN encounter_provider ON encounter.encounter_id = encounter_provider.encounter_id LEFT JOIN provider ON encounter_provider.provider_id = provider.provider_id LEFT JOIN person_name ON provider.person_id = person_name.person_id WHERE (encounter_provider.voided = 0 OR encounter_provider.voided IS NULL) AND (person_name.preferred = 0 OR person_name.preferred IS  NULL)) AS encounter_type_location ON encounter_type_location.encounter_id = obs_location.encounter_id 
 JOIN
 (SELECT visit.patient_id, visit.visit_type_id, visit_type.name AS visit_type_name, visit.date_started, visit.date_stopped, visit.location_id AS visit_location_id, location.name AS visit_location_name, location.retired AS visit_location_retired, visit.voided AS visit_voided, visit.visit_id FROM visit JOIN visit_type ON visit.visit_type_id = visit_type.visit_type_id JOIN location ON visit.location_id = location.location_id) AS visit_location ON encounter_type_location.visit_id = visit_location.visit_id 
 JOIN
@@ -46,13 +47,16 @@ CREATE TABLE IF NOT EXISTS visit_data_matvw (
     encounter_location_name VARCHAR(255),
     encounter_datetime DATETIME,
     encounter_provider_id INT(11),
+    encounter_provider_person_id INT(11), 
+    encounter_provider_name VARCHAR(255),
+    encounter_provider_retired INT(11),
     obs_id INT(11),
     obs_concept_id INT(11),
     obs_concept_name_en VARCHAR(255),
     obs_datetime DATETIME,
     obs_location_id INT(11),
     obs_location_name VARCHAR(255),
-    obs_value VARCHAR(255),
+    obs_value TEXT,
     obs_value_concept_id INT(11),
     facility_name VARCHAR(255),
     facility_id INT(11),
@@ -185,6 +189,9 @@ CREATE OR REPLACE VIEW patient_visit_data_vw AS SELECT
     encounter_location_name,
     encounter_datetime,
     encounter_provider_id,
+    encounter_provider_person_id,
+    encounter_provider_name,
+    encounter_provider_retired,
     obs_id,
     obs_concept_id,
     obs_concept_name_en,
@@ -208,7 +215,7 @@ CREATE OR REPLACE VIEW patient_visit_data_vw AS SELECT
 CREATE TABLE age_range(age_range_id INT AUTO_INCREMENT PRIMARY KEY ,age_range VARCHAR(6));
 
 -- INSERT CONSTANT AGE RANGES
-INSERT INTO age_range(age_range)VALUES ('<24'),('25-29'),('30-34'),('35-39'),('40-49'),('50-59'),('60+');
+INSERT INTO age_range(age_range)VALUES ('<9'),('10-14'),('15-19'),('20-24'),('25-29'),('30-34'),('35-39'),('40-44'),('45-49'),('50+');
 
 -- CREATE PROCEDURE FOR REFRESHING MATERIALIZED VIEWS
 DELIMITER $$
@@ -222,27 +229,52 @@ CREATE PROCEDURE RefreshMaterializedViews()
         INSERT INTO patient_data_matvw (patient_id,identifier,identifier_type_id,identifier_type_name,identifier_location_id,identifier_location_name,identifier_date_created,identifier_location_retired,birthdate,age,gender,patient_voided,dead,facility_name,facility_id,facility_dhis_ou_id,facility_retired,district_name,district_id,district_retired,province_name,province_id,province_retired) SELECT * FROM patient_data_vw join location_data_vw on patient_data_vw.identifier_location_id = location_data_vw.facility_id;
     END;
 
+CREATE FUNCTION ViralLoadRange(
+    viralLoad INT
+) 
+RETURNS VARCHAR(50)
+DETERMINISTIC
+BEGIN
+    DECLARE viralLoadRange VARCHAR(50);
+ 
+    IF viralLoad >= 1000 THEN
+        SET viralLoadRange = 'Viral Load 1000 and above';
+    ELSEIF viralLoad BETWEEN 1 AND 999 THEN
+        SET viralLoadRange = 'Viral load below 1000';
+    ELSEIF viralLoad = 0 THEN
+        SET viralLoadRange = 'Viral load is 0';
+    END IF;
+    RETURN viralLoadRange;
+END;
+
 CREATE TRIGGER age_range BEFORE INSERT ON patient_data_matvw
 FOR EACH ROW
 BEGIN
-    IF NEW.age <= 24 THEN
-        SET NEW.age_range = '<24';
+    IF NEW.age BETWEEN 0 AND 9 THEN
+        SET NEW.age_range = '<9';
+    ELSEIF NEW.age BETWEEN 10 AND 14 THEN
+        SET NEW.age_range = '10-14';
+    ELSEIF NEW.age BETWEEN 15 AND 19 THEN
+        SET NEW.age_range = '15-19';
+    ELSEIF NEW.age BETWEEN 20 AND 24 THEN
+        SET NEW.age_range = '20-24';
     ELSEIF NEW.age BETWEEN 25 AND 29 THEN
         SET NEW.age_range = '25-29';
     ELSEIF NEW.age BETWEEN 30 AND 34 THEN
         SET NEW.age_range = '30-34';
     ELSEIF NEW.age BETWEEN 35 AND 39 THEN
         SET NEW.age_range = '35-39';
-    ELSEIF NEW.age BETWEEN 40 AND 49 THEN
-        SET NEW.age_range = '40-49';
-    ELSEIF NEW.age BETWEEN 50 AND 59 THEN
-        SET NEW.age_range = '50-59';
-    ELSEIF NEW.age >= 60 THEN
-        SET NEW.age_range = '60+';
+    ELSEIF NEW.age BETWEEN 40 AND 44 THEN
+        SET NEW.age_range = '40-44';
+    ELSEIF NEW.age BETWEEN 45 AND 49 THEN
+        SET NEW.age_range = '45-49';
+    ELSEIF NEW.age >= 50 THEN
+        SET NEW.age_range = '50+';
     END IF;
 END;
 $$
 
 GRANT EXECUTE ON PROCEDURE openmrs.RefreshMaterializedViews TO 'smartcerv'@'%';
+GRANT EXECUTE ON FUNCTION openmrs.ViralLoadRange TO 'smartcerv'@'%';
 -- REFRESH MATERIALIZED VIEWS
 CALL RefreshMaterializedViews();
