@@ -361,6 +361,7 @@ def main():
                 is_active = True
             facility_info.append((facility['facility_id'], facility['facility_dhis_ou_id'], facility['facility_name'], month, url, dhis_credentials, is_active))
             facility_names.append(facility['facility_name'])
+        print('Facilities: ', facility_info)
         with ProcessPoolExecutor(max_workers=1) as executor:
             responses = dict(zip(facility_names, executor.map(generate_json_payload, facility_info)))
         print('Total number of facilities: ', len(responses))
